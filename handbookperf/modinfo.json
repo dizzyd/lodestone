@@ -5,9 +5,11 @@
     "authors": [
         "DizzyD"
     ],
-    "description": "Client-side fixes for slow handbook loading and opening, and a laggy crafting grid, in large packs.",
-    "version": "1.4.0",
-    "side": "Client",
+    "description": "Fixes for slow handbook loading and opening, and a laggy crafting grid, in large packs. Optional on both client and server.",
+    "version": "1.4.1",
+    "side": "Universal",
+    "requiredOnClient": false,
+    "requiredOnServer": false,
     "dependencies": {
         "game": "1.22.0"
     }

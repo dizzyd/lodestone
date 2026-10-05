@@ -1,8 +1,13 @@
 # Handbook and Crafting Performance Fixes
 
-Client-side fixes for a slow handbook and a laggy crafting grid in large packs. Each fix only applies when the mod
-it works around is installed. The client log says what was done (`[handbookperf]`).
-Client-only: servers do not need it.
+Fixes for a slow handbook and a laggy crafting grid in large packs. The fixes for other
+mods only apply when the mod they work around is installed. The log says what was done
+(`[handbookperf]`).
+
+It is optional on both sides: players can join a server without it, and a server can run
+it without players having it. The handbook fixes run on the client. The crafting grid fix
+runs on whichever side has the mod, because the server repeats the same recipe lookup for
+every player's crafting grid.
 
 ## A Culinary Artillery: handbook takes minutes to fill
 
@@ -61,7 +66,7 @@ ingredients of thousands of recipes in a large pack (W4RD0's Furniture alone add
 1,100, one per wood type), so each add scans thousands of entries, and the grid gets
 slower with every slot filled.
 
-This mod swaps that call for a hash set check. Recipes compare by reference, as before,
+This mod swaps that call for a hash set check, on the client and on the server. Recipes compare by reference, as before,
 and the candidate list fills in the same order, so the same recipe is found. Lookups of
 5 ms or more are logged with their candidate count. `HANDBOOKPERF_NOCRAFTFIX=1` turns the
 fix off and leaves the timing on.

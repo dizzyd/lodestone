@@ -6,7 +6,13 @@ namespace handbookperf;
 
 public class HandbookPerfModSystem : ModSystem
 {
-    public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
+    // Both sides run the crafting grid's recipe lookup; only the client has a handbook
+    public override void Start(ICoreAPI api)
+    {
+        // Start runs once per side, and in singleplayer both sides share this assembly,
+        // so CraftingGridFix checks whether it has already patched
+        CraftingGridFix.Apply(new Harmony(Mod.Info.ModID), Mod);
+    }
 
     public override void StartClientSide(ICoreClientAPI api)
     {
@@ -16,7 +22,6 @@ public class HandbookPerfModSystem : ModSystem
         AcaMatchingStackFix.Apply(api, Mod);
         LangLookupFix.Apply(harmony, Mod);
         BuildTiming.Apply(harmony, Mod.Logger);
-        CraftingGridFix.Apply(harmony, Mod.Logger);
 
         // ARL patches in StartPre, but whether its patch is needed depends on the
         // collectibles, which are only all present by LevelFinalize.

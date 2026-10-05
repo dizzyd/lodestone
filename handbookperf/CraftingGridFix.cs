@@ -33,10 +33,11 @@ internal static class CraftingGridFix
 
     public static string Mode => deduplicating ? "hashed" : "vanilla";
 
-    public static void Apply(Harmony harmony, ILogger log)
+    public static void Apply(Harmony harmony, Mod mod)
     {
-        logger = log;
         MethodInfo find = AccessTools.Method(typeof(InventoryCraftingGrid), "FindMatchingRecipe");
+        if (Harmony.GetPatchInfo(find)?.Owners.Contains(harmony.Id) == true) return;
+        ILogger log = logger = mod.Logger;
         var start = new HarmonyMethod(typeof(CraftingGridFix), nameof(Start));
         var end = new HarmonyMethod(typeof(CraftingGridFix), nameof(End));
         if (Environment.GetEnvironmentVariable("HANDBOOKPERF_NOCRAFTFIX") == "1")
