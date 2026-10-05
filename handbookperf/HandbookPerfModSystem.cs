@@ -16,6 +16,7 @@ public class HandbookPerfModSystem : ModSystem
         AcaMatchingStackFix.Apply(api, Mod);
         LangLookupFix.Apply(harmony, Mod);
         BuildTiming.Apply(harmony, Mod.Logger);
+        CraftingGridFix.Apply(harmony, Mod.Logger);
 
         // ARL patches in StartPre, but whether its patch is needed depends on the
         // collectibles, which are only all present by LevelFinalize.

@@ -1,6 +1,6 @@
-# Handbook Performance Fixes
+# Handbook and Crafting Performance Fixes
 
-Client-side fixes for a slow handbook in large packs. Each fix only applies when the mod
+Client-side fixes for a slow handbook and a laggy crafting grid in large packs. Each fix only applies when the mod
 it works around is installed. The client log says what was done (`[handbookperf]`).
 Client-only: servers do not need it.
 
@@ -51,6 +51,20 @@ from running.
 
 When no collectible uses that exclusion, this mod removes ARL's prefix. If any does, it
 leaves the prefix alone.
+
+## Vanilla crafting grid: every slot change rescans thousands of recipes
+
+Each change to a crafting grid slot makes `InventoryCraftingGrid.FindMatchingRecipe`
+collect every grid recipe that a filled slot's stack is an ingredient of, deduplicating
+with `List.AddIfNotPresent`, which is a linear scan. Planks, sticks and tools are
+ingredients of thousands of recipes in a large pack (W4RD0's Furniture alone adds about
+1,100, one per wood type), so each add scans thousands of entries, and the grid gets
+slower with every slot filled.
+
+This mod swaps that call for a hash set check. Recipes compare by reference, as before,
+and the candidate list fills in the same order, so the same recipe is found. Lookups of
+5 ms or more are logged with their candidate count. `HANDBOOKPERF_NOCRAFTFIX=1` turns the
+fix off and leaves the timing on.
 
 ## Building
 
