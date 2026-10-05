@@ -1,0 +1,14 @@
+{
+    "type": "code",
+    "modid": "handbookperf",
+    "name": "Handbook Performance Fixes",
+    "authors": [
+        "DizzyD"
+    ],
+    "description": "Client-side fixes for slow handbook loading and opening in large packs with Attribute Rendering Library or A Culinary Artillery.",
+    "version": "1.3.0",
+    "side": "Client",
+    "dependencies": {
+        "game": "1.22.0"
+    }
+}
