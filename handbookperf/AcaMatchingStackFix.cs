@@ -38,11 +38,9 @@ internal static class AcaMatchingStackFix
 {
     private const string AcaHarmonyId = "com.jakecool19.efrecipes.cookingoverhaul";
 
-    // HANDBOOKPERF_NOINDEX=1 keeps the cached array but scans every valid stack, for A/B timing
-    private static readonly bool indexed = Environment.GetEnvironmentVariable("HANDBOOKPERF_NOINDEX") != "1";
     private static bool applied;
 
-    public static string Mode => !applied ? "ACA's own matcher" : indexed ? "indexed" : "full scan";
+    public static string Mode => applied ? "indexed" : "ACA's own matcher";
 
     public static void Apply(ICoreClientAPI capi, Mod mod)
     {
@@ -58,10 +56,10 @@ internal static class AcaMatchingStackFix
         harmony.Unpatch(getMatchingStack, HarmonyPatchType.Prefix, mod.Info.ModID);
         harmony.Patch(getMatchingStack, prefix: new HarmonyMethod(typeof(AcaMatchingStackFix), nameof(Prefix)));
         applied = true;
-        mod.Logger.Notification("Replaced {0}'s CookingRecipeIngredient.GetMatchingStack prefix ({1}) with a {2} copy",
-            AcaHarmonyId, acaPrefixes, indexed ? "indexed" : "full-scan");
+        mod.Logger.Notification("Replaced {0}'s CookingRecipeIngredient.GetMatchingStack prefix ({1}) with an indexed copy",
+            AcaHarmonyId, acaPrefixes);
 
-        if (indexed) NarrowMealRecipeStacks(harmony, mod);
+        NarrowMealRecipeStacks(harmony, mod);
     }
 
     // ---- ACA's handbook meal-recipe caching ----
@@ -161,7 +159,7 @@ internal static class AcaMatchingStackFix
     private static bool OnlyOurCopy()
     {
         Patches patches = Harmony.GetPatchInfo(getMatchingStackMethod);
-        return applied && indexed && patches != null
+        return applied && patches != null
             && patches.Prefixes.Count == 1 && patches.Prefixes[0].PatchMethod.DeclaringType == typeof(AcaMatchingStackFix)
             && patches.Postfixes.Count == 0 && patches.Transpilers.Count == 0 && patches.Finalizers.Count == 0;
     }
@@ -225,7 +223,7 @@ internal static class AcaMatchingStackFix
         if (inputStack == null) return false;
 
         CollectibleObject collectible = inputStack.Collectible;
-        __result = !indexed || collectible == null || OverridesEquals(collectible)
+        __result = collectible == null || OverridesEquals(collectible)
             ? FullScan(inputStack, __instance)
             : IndexedScan(inputStack, collectible, __instance);
         return false;

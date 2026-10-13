@@ -47,19 +47,20 @@ internal static class CraftingGridFix
         }
     }
 
-    public static void Apply(Harmony harmony, Mod mod)
+    public static void Apply(Harmony harmony, Mod mod, bool takeOverFromOptiTime)
     {
         MethodInfo find = AccessTools.Method(typeof(InventoryCraftingGrid), "FindMatchingRecipe");
         if (Harmony.GetPatchInfo(find)?.Owners.Contains(harmony.Id) == true) return;
         ILogger log = logger = mod.Logger;
-        var start = new HarmonyMethod(typeof(CraftingGridFix), nameof(Start));
-        var end = new HarmonyMethod(typeof(CraftingGridFix), nameof(End));
-        if (Environment.GetEnvironmentVariable("HANDBOOKPERF_NOCRAFTFIX") == "1")
+        Patch optiTime = Harmony.GetPatchInfo(find)?.Prefixes.FirstOrDefault(p => p.PatchMethod.DeclaringType?.FullName == OptiTimeLookup);
+        if (optiTime != null && !takeOverFromOptiTime)
         {
-            harmony.Patch(find, prefix: start, postfix: end);
-            log.Notification("Crafting grid fix off (HANDBOOKPERF_NOCRAFTFIX=1); timing only");
+            log.Notification("Leaving the crafting grid recipe lookup to OptiTime (CraftingGridOverOptiTime is off)");
             return;
         }
+
+        var start = new HarmonyMethod(typeof(CraftingGridFix), nameof(Start));
+        var end = new HarmonyMethod(typeof(CraftingGridFix), nameof(End));
         // Ahead of any prefix that replaces the method, so the timing covers whatever runs
         start.priority = Priority.First + 1;
         harmony.Patch(find, prefix: start, postfix: end);
@@ -81,7 +82,6 @@ internal static class CraftingGridFix
         // prefix ahead of OptiTime's instead; returning false then skips both. Its candidate
         // order differs from vanilla's, and it reuses the last grid's recipe before trying
         // shaped ones first, so it can pick a different recipe from a server without it.
-        Patch optiTime = Harmony.GetPatchInfo(find)?.Prefixes.FirstOrDefault(p => p.PatchMethod.DeclaringType?.FullName == OptiTimeLookup);
         if (optiTime != null)
         {
             Harmony.ReversePatch(find, new HarmonyMethod(typeof(CraftingGridFix), nameof(FindMatchingRecipe)),
@@ -179,7 +179,7 @@ internal static class CraftingGridFix
         double ms = Stopwatch.GetElapsedTime(__state).TotalMilliseconds;
         int count = !deduplicating ? -1 : currentList != null ? seen.Count : 0;
         currentList = null;   // don't pin the list between calls
-        if (ms >= 5)
+        if (ms >= 5 && HandbookPerfModSystem.Config.LogTimings)
         {
             logger.Notification("Crafting grid recipe lookup took {0:F1} ms{1} ({2})",
                 ms, count >= 0 ? $" over {count} candidate recipes" : "", Mode);

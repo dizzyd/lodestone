@@ -9,6 +9,21 @@ it without players having it. The handbook fixes run on the client. The crafting
 runs on whichever side has the mod, because the server repeats the same recipe lookup for
 every player's crafting grid.
 
+## Settings
+
+`ModConfig/handbookperf.json` turns each fix off on its own. Every setting is on by
+default, and a change takes effect the next time a world loads.
+
+| Setting | What it turns off |
+|---|---|
+| `LangIndex` | the lang lookup index |
+| `AcaMatcher` | the indexed copy of ACA's matcher, and the narrowed meal matching with it |
+| `CraftingGrid` | the crafting grid fix, on whichever side reads the file |
+| `CraftingGridOverOptiTime` | running the crafting grid lookup in place of OptiTime's; off leaves it to OptiTime on the client |
+| `EmptyHandbookSearch` | listing the handbook's pages directly when the search box is empty |
+| `RemoveArlFilter` | removing ARL's handbook search patch |
+| `LogTimings` | the handbook build time and slow crafting lookups in the log |
+
 ## A Culinary Artillery: handbook takes minutes to fill
 
 ACA replaces `CookingRecipeIngredient.GetMatchingStack` with a prefix that allocates a
@@ -20,7 +35,7 @@ done.
 
 This mod swaps ACA's prefix for a copy with the same results that builds the array once
 and indexes each ingredient's valid stacks by item. Items whose class overrides
-`Equals` take the original full scan. `HANDBOOKPERF_NOINDEX=1` turns the index off.
+`Equals` take the original full scan.
 
 That still leaves the handbook calling the matcher for every recipe, ingredient and
 handbook stack: about 52 million calls in a pack with 866 meal recipes and 20,000
@@ -97,8 +112,7 @@ and the candidate list fills in the same order, so the same recipe is found. It 
 skips a shaped recipe without testing it when its ingredient count differs from the
 number of filled slots, since a shaped recipe fills exactly the slots its pattern names.
 Recipe classes from other mods, and shapeless recipes, are always tested. Lookups of
-5 ms or more are logged with their candidate count. `HANDBOOKPERF_NOCRAFTFIX=1` turns the
-fix off and leaves the timing on.
+5 ms or more are logged with their candidate count.
 
 ### With OptiTime
 
