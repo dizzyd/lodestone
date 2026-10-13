@@ -22,6 +22,16 @@ This mod swaps ACA's prefix for a copy with the same results that builds the arr
 and indexes each ingredient's valid stacks by item. Items whose class overrides
 `Equals` take the original full scan. `HANDBOOKPERF_NOINDEX=1` turns the index off.
 
+That still leaves the handbook calling the matcher for every recipe, ingredient and
+handbook stack: about 52 million calls in a pack with 866 meal recipes and 20,000
+handbook stacks, nearly all of which find nothing. Vanilla's caching runs first, and
+ACA's for the recipes vanilla does not know. While this mod's copy is the only patch on
+the matcher, both loops walk only the stacks that could match each ingredient: those of
+the same item as one of its valid stacks, those whose code a wildcard could match, and
+those whose class overrides `Equals`. They are walked in the handbook's order, so the
+same stacks are found in the same order. In that pack the handbook's first page build
+after joining fell from 13 s to 5 s (58 s without this mod).
+
 ## Timing
 
 Each world join logs how long the handbook took to build its pages and how much of that

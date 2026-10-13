@@ -3,11 +3,13 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
 namespace handbookperf;
@@ -24,6 +26,13 @@ namespace handbookperf;
 /// indexes each ingredient's valid stacks by item, so an input is only compared against
 /// stacks of the same item and the wildcards. Collectibles that override Equals take
 /// the original full scan.
+///
+/// That still leaves the handbook's CreateCachedMealRecipeStacks (vanilla's, which runs
+/// first and caches, and ACA's) calling it for every recipe x ingredient x handbook
+/// stack: some 50 million calls, nearly all of which find nothing. While this copy is
+/// the only patch on GetMatchingStack, the stack array those loops walk is swapped, per
+/// ingredient, for the stacks the index says could match, in the same order, so the
+/// calls that remain find the same stacks.
 /// </summary>
 internal static class AcaMatchingStackFix
 {
@@ -51,6 +60,163 @@ internal static class AcaMatchingStackFix
         applied = true;
         mod.Logger.Notification("Replaced {0}'s CookingRecipeIngredient.GetMatchingStack prefix ({1}) with a {2} copy",
             AcaHarmonyId, acaPrefixes, indexed ? "indexed" : "full-scan");
+
+        if (indexed) NarrowMealRecipeStacks(harmony, mod);
+    }
+
+    // ---- ACA's handbook meal-recipe caching ----
+
+    private static MethodInfo getMatchingStackMethod;
+    private static readonly MethodInfo TryGetStacks = AccessTools.Method(typeof(ObjectCacheUtil), nameof(ObjectCacheUtil.TryGet))
+        .MakeGenericMethod(typeof(ItemStack[]));
+
+    private static void NarrowMealRecipeStacks(Harmony harmony, Mod mod)
+    {
+        getMatchingStackMethod = AccessTools.Method(typeof(CookingRecipeIngredient), nameof(CookingRecipeIngredient.GetMatchingStack));
+        Narrow(harmony, mod, "the handbook's", AccessTools.Method(typeof(ModSystemSurvivalHandbook), "CreateCachedMealRecipeStacks"));
+        Narrow(harmony, mod, "ACA's", AccessTools.TypeByName("ACulinaryArtillery.Util.HandbookInfoExtensions") is Type extensions
+            ? AccessTools.Method(extensions, "CreateCachedMealRecipeStacks") : null);
+    }
+
+    private static void Narrow(Harmony harmony, Mod mod, string whose, MethodInfo create)
+    {
+        // The work is in the lambda it hands ObjectCacheUtil.GetOrCreate
+        MethodInfo body = create == null ? null : PatchProcessor.GetOriginalInstructions(create)
+            .Where(i => i.opcode == OpCodes.Ldftn).Select(i => i.operand).OfType<MethodInfo>()
+            .FirstOrDefault(m => m.Name.Contains("CreateCachedMealRecipeStacks"));
+        if (body == null)
+        {
+            mod.Logger.Warning("Not narrowing {0} meal-recipe matching: its CreateCachedMealRecipeStacks has changed", whose);
+            return;
+        }
+
+        List<CodeInstruction> code = PatchProcessor.GetOriginalInstructions(body);
+        int loads = code.Count(IsStacksLoad);
+        int calls = code.Count(i => i.Calls(getMatchingStackMethod));
+        if (loads != 1 || calls != 1)
+        {
+            mod.Logger.Warning("Not narrowing {0} meal-recipe matching: expected one load of the handbook's stacks and one GetMatchingStack call, found {1} and {2}", whose, loads, calls);
+            return;
+        }
+        harmony.Patch(body, transpiler: new HarmonyMethod(typeof(AcaMatchingStackFix), nameof(NarrowTranspiler)));
+        mod.Logger.Notification("Matching each of {0} meal ingredients only against the handbook stacks that could satisfy it", whose);
+    }
+
+    // Vanilla asks ObjectCacheUtil for the stacks inside the loop; ACA's lambda captured them
+    private static bool IsStacksLoad(CodeInstruction i) =>
+        i.Calls(TryGetStacks) || i.opcode == OpCodes.Ldfld && i.operand is FieldInfo { Name: "allstacks" } f && f.FieldType == typeof(ItemStack[]);
+
+    // After the stack array is loaded for the inner loop, load the ingredient the loop's
+    // GetMatchingStack call is made on and hand both to Candidates
+    private static IEnumerable<CodeInstruction> NarrowTranspiler(IEnumerable<CodeInstruction> instructions)
+    {
+        List<CodeInstruction> code = instructions.ToList();
+        int call = code.FindIndex(i => i.Calls(getMatchingStackMethod));
+        CodeInstruction ingredient = call >= 2 && code[call - 2].IsLdloc() ? code[call - 2] : null;
+        int load = code.FindIndex(IsStacksLoad);
+        if (ingredient == null || load < 0) return code;
+
+        code.InsertRange(load + 1,
+        [
+            new CodeInstruction(ingredient.opcode, ingredient.operand),
+            new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(AcaMatchingStackFix), nameof(Candidates))),
+        ]);
+        return code;
+    }
+
+    /// <summary>
+    /// The stacks in <paramref name="allstacks"/>, in order, that GetMatchingStack could
+    /// match <paramref name="ingredient"/> with; every other one it answers null. All of
+    /// them unless this mod's copy is the only patch on GetMatchingStack.
+    /// </summary>
+    private static ItemStack[] Candidates(ItemStack[] allstacks, CookingRecipeIngredient ingredient)
+    {
+        if (allstacks == null || ingredient?.ValidStacks == null || !OnlyOurCopy()) return allstacks;
+
+        HandbookStacks stacks = HandbookStacks.For(allstacks);
+        IngredientIndex index = IndexFor(ingredient, ingredient.ValidStacks);
+        var positions = new List<int>(stacks.Always);
+        foreach (long item in index.ByItem.Keys)
+        {
+            if (stacks.ByItem.TryGetValue(item, out int[] found)) positions.AddRange(found);
+        }
+        foreach (Step wildcard in index.Wildcards)
+        {
+            AssetLocation pattern = ingredient.ValidStacks[wildcard.Index].Code;
+            for (int i = 0; i < stacks.Codes.Length; i++)
+            {
+                if (stacks.Codes[i] != null && MightMatch(pattern, stacks.Codes[i])) positions.Add(i);
+            }
+        }
+        positions.Sort();
+
+        var narrowed = new List<ItemStack>(positions.Count);
+        for (int i = 0; i < positions.Count; i++)
+        {
+            if (i == 0 || positions[i] != positions[i - 1]) narrowed.Add(allstacks[positions[i]]);
+        }
+        return narrowed.ToArray();
+    }
+
+    private static bool OnlyOurCopy()
+    {
+        Patches patches = Harmony.GetPatchInfo(getMatchingStackMethod);
+        return applied && indexed && patches != null
+            && patches.Prefixes.Count == 1 && patches.Prefixes[0].PatchMethod.DeclaringType == typeof(AcaMatchingStackFix)
+            && patches.Postfixes.Count == 0 && patches.Transpilers.Count == 0 && patches.Finalizers.Count == 0;
+    }
+
+    /// <summary>
+    /// Whether CollectibleObject.WildCardMatch(<paramref name="pattern"/>) could be true for
+    /// <paramref name="code"/>. WildcardUtil.Match wants the same domain, unless the
+    /// pattern's is "*", and the text before the first '*' at the start of the path, in
+    /// either ASCII case. '@' patterns are regexes, and fastMatch has its own case rules
+    /// outside ASCII, so both of those are always tried.
+    /// </summary>
+    private static bool MightMatch(AssetLocation pattern, AssetLocation code)
+    {
+        if (pattern.Domain != "*" && pattern.Domain != code.Domain) return false;
+        string path = pattern.Path;
+        if (path.Length > 0 && path[0] == '@') return true;
+        int star = path.IndexOf('*');
+        ReadOnlySpan<char> prefix = path.AsSpan(0, star < 0 ? path.Length : star);
+        foreach (char c in prefix) if (c >= 0x80) return true;
+        return code.Path.AsSpan().StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The handbook's stacks by item, and those GetMatchingStack would test against every valid stack.</summary>
+    private sealed class HandbookStacks
+    {
+        public readonly Dictionary<long, int[]> ByItem = [];
+        public readonly int[] Always;
+        public readonly AssetLocation[] Codes;
+
+        private HandbookStacks(ItemStack[] allstacks)
+        {
+            var byItem = new Dictionary<long, List<int>>();
+            var always = new List<int>();
+            Codes = new AssetLocation[allstacks.Length];
+            for (int i = 0; i < allstacks.Length; i++)
+            {
+                ItemStack stack = allstacks[i];
+                CollectibleObject collectible = stack?.Collectible;
+                Codes[i] = collectible?.Code;
+                if (stack == null) continue;   // GetMatchingStack(null) is null
+                if (collectible == null || OverridesEquals(collectible)) always.Add(i);
+                else
+                {
+                    long key = ItemKey(stack.Class, stack.Id);
+                    if (!byItem.TryGetValue(key, out List<int> list)) byItem[key] = list = [];
+                    list.Add(i);
+                }
+            }
+            foreach (var (key, list) in byItem) ByItem[key] = list.ToArray();
+            Always = always.ToArray();
+        }
+
+        private static readonly ConditionalWeakTable<ItemStack[], HandbookStacks> cache = new();
+
+        public static HandbookStacks For(ItemStack[] allstacks) => cache.GetValue(allstacks, a => new HandbookStacks(a));
     }
 
     public static bool Prefix(ItemStack inputStack, ref CookingRecipeStack __result, CookingRecipeIngredient __instance)
