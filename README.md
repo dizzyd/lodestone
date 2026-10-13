@@ -42,8 +42,11 @@ one of its ~20k pages.
 This mod answers `HasTranslation` and `GetMatchingIfExists` from an index: wildcard keys
 by prefix, and regex keys grouped by the literal text a match must begin with. Each key
 keeps its table position, so the first match in table order still wins. The index
-rebuilds whenever a lang table is replaced or changed. If another mod already patches
-either method, this fix stays off. Checked against vanilla on this pack's tables
+rebuilds whenever a lang table is replaced or changed. If another mod already rewrites
+one of the two methods with a prefix or transpiler, that method is left to it. OptiTime's
+transpiler on `HasTranslation` is the exception: it only makes the set of missing keys
+safe to add to from the handbook's thread, and this mod's version does that itself.
+Checked against vanilla on this pack's tables
 (31k exact, 4k wildcard and 600 regex keys): identical results on 97k lookups.
 
 ## Attribute Rendering Library: handbook stalls on every open

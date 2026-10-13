@@ -30,19 +30,31 @@ internal static class LangLookupFix
             [typeof(string), typeof(bool), typeof(bool)]);
         MethodInfo getMatchingIfExists = AccessTools.Method(typeof(TranslationService), nameof(TranslationService.GetMatchingIfExists));
 
-        // Another mod already rewriting these would be bypassed by a replacing prefix
-        string[] others = new[] { hasTranslation, getMatchingIfExists }
-            .SelectMany(m => Harmony.GetPatchInfo(m)?.Owners ?? Enumerable.Empty<string>())
-            .Where(owner => owner != mod.Info.ModID).Distinct().ToArray();
+        PatchUnlessRewritten(harmony, mod, hasTranslation, nameof(HasTranslationPrefix));
+        PatchUnlessRewritten(harmony, mod, getMatchingIfExists, nameof(GetMatchingIfExistsPrefix));
+    }
+
+    // OptiTime's transpiler on HasTranslation only makes the not-found set thread-safe,
+    // which HasTranslationPrefix does itself
+    private const string OptiTimeNotFoundFix = "OptiTime.TranslationServicePatch";
+
+    /// <summary>
+    /// Another mod's prefix or transpiler on a method would be bypassed by this replacing
+    /// prefix, so each method is left to it alone. Postfixes still run either way.
+    /// </summary>
+    private static void PatchUnlessRewritten(Harmony harmony, Mod mod, MethodInfo method, string prefix)
+    {
+        Patches info = Harmony.GetPatchInfo(method);
+        string[] others = (info == null ? [] : info.Prefixes.Concat(info.Transpilers))
+            .Where(p => p.owner != harmony.Id && p.PatchMethod.DeclaringType?.FullName != OptiTimeNotFoundFix)
+            .Select(p => p.owner).Distinct().ToArray();
         if (others.Length > 0)
         {
-            mod.Logger.Notification("Leaving TranslationService lookups alone: already patched by {0}", string.Join(", ", others));
+            mod.Logger.Notification("Leaving TranslationService.{0} alone: already rewritten by {1}", method.Name, string.Join(", ", others));
             return;
         }
-
-        harmony.Patch(hasTranslation, prefix: new HarmonyMethod(typeof(LangLookupFix), nameof(HasTranslationPrefix)));
-        harmony.Patch(getMatchingIfExists, prefix: new HarmonyMethod(typeof(LangLookupFix), nameof(GetMatchingIfExistsPrefix)));
-        mod.Logger.Notification("Indexed TranslationService wildcard lookups");
+        harmony.Patch(method, prefix: new HarmonyMethod(typeof(LangLookupFix), prefix));
+        mod.Logger.Notification("Indexed TranslationService.{0} wildcard lookups", method.Name);
     }
 
     // ---- the two lookups, as vanilla, with the scans answered by the index ----
@@ -65,7 +77,7 @@ internal static class LangLookupFix
         if (!key.Contains(':')) key = "game:" + key;   // == validKey; vanilla matches wildcards on this one
         LangIndex index = IndexFor(__instance);
         bool result = index.FirstWildcard(key) >= 0 || index.FirstRegex(validKey) >= 0;
-        if (!result && logErrors && !key.Contains("desc-") && NotFound(__instance).Add(key))
+        if (!result && logErrors && !key.Contains("desc-") && AddNotFound(__instance, key))
         {
             Logger(__instance).VerboseDebug("Lang key not found: " + key.Replace("{", "{{").Replace("}", "}}"));
         }
@@ -93,6 +105,14 @@ internal static class LangLookupFix
         int regex = index.FirstRegex(validKey);
         __result = regex >= 0 ? Format(__instance, index.Regexes[regex].Value, args) : null;
         return false;
+    }
+
+    // Vanilla adds from whichever thread asks, and the handbook asks from its page-loading
+    // thread. This is the only place the set is added to once the prefix is in.
+    private static bool AddNotFound(TranslationService service, string key)
+    {
+        HashSet<string> notFound = NotFound(service);
+        lock (notFound) return notFound.Add(key);
     }
 
     // TranslationService.KeyWithDomain, which is private
