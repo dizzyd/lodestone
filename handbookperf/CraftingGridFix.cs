@@ -60,28 +60,60 @@ internal static class CraftingGridFix
             log.Notification("Crafting grid fix off (HANDBOOKPERF_NOCRAFTFIX=1); timing only");
             return;
         }
+        // Ahead of any prefix that replaces the method, so the timing covers whatever runs
+        start.priority = Priority.First + 1;
         harmony.Patch(find, prefix: start, postfix: end);
         List<CodeInstruction> original = PatchProcessor.GetOriginalInstructions(find);
 
         int adds = original.Count(i => i.Calls(VanillaAdd));
-        if (adds == 1)
-        {
-            harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(DedupTranspiler)));
-            deduplicating = true;
-            log.Notification("Deduplicating crafting grid recipe candidates with a hash set");
-        }
-        else log.Warning("Not deduplicating crafting grid recipe candidates: expected one AddIfNotPresent<GridRecipe> call, found {0}", adds);
-
+        deduplicating = adds == 1;
+        if (!deduplicating) log.Warning("Not deduplicating crafting grid recipe candidates: expected one AddIfNotPresent<GridRecipe> call, found {0}", adds);
 
         // One call per pass: shaped recipes, then shapeless
         int matches = original.Count(i => i.Calls(VanillaMatches));
-        if (matches == 2)
+        prechecking = matches == 2;
+        if (!prechecking) log.Warning("Not prechecking crafting grid recipes: expected two GridRecipe.Matches calls, found {0}", matches);
+
+        if (!deduplicating && !prechecking) return;
+
+        // OptiTime replaces the method with a prefix that returns false, so the body these
+        // transpilers rewrite would never run. Run a rewritten copy of vanilla's body from a
+        // prefix ahead of OptiTime's instead; returning false then skips both. Its candidate
+        // order differs from vanilla's, and it reuses the last grid's recipe before trying
+        // shaped ones first, so it can pick a different recipe from a server without it.
+        Patch optiTime = Harmony.GetPatchInfo(find)?.Prefixes.FirstOrDefault(p => p.PatchMethod.DeclaringType?.FullName == OptiTimeLookup);
+        if (optiTime != null)
         {
-            harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(MatchesTranspiler)));
-            prechecking = true;
-            log.Notification("Skipping shaped crafting grid recipes whose ingredient count differs from the filled slots");
+            Harmony.ReversePatch(find, new HarmonyMethod(typeof(CraftingGridFix), nameof(FindMatchingRecipe)),
+                AccessTools.Method(typeof(CraftingGridFix), nameof(ReverseTranspiler)));
+            var takeOver = new HarmonyMethod(typeof(CraftingGridFix), nameof(TakeOver)) { priority = Priority.First, before = [optiTime.owner] };
+            harmony.Patch(find, prefix: takeOver);
+            log.Notification("Finding crafting grid recipes in place of OptiTime's recipe lookup, which can pick a different recipe from vanilla's ({0}). OptiTime's other optimizations are unaffected", Mode);
+            return;
         }
-        else log.Warning("Not prechecking crafting grid recipes: expected two GridRecipe.Matches calls, found {0}", matches);
+
+        if (deduplicating) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(DedupTranspiler)));
+        if (prechecking) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(MatchesTranspiler)));
+        log.Notification("Finding crafting grid recipes faster ({0})", Mode);
+    }
+
+    // OptiTime's patch class, which is steadier than its Harmony id
+    private const string OptiTimeLookup = "OptiTime.RecipeLookupCacheOptimization";
+
+    // Vanilla's FindMatchingRecipe, as rewritten by ReverseTranspiler
+    private static void FindMatchingRecipe(InventoryCraftingGrid instance) => throw new NotImplementedException("Replaced by a reverse patch");
+
+    private static IEnumerable<CodeInstruction> ReverseTranspiler(IEnumerable<CodeInstruction> instructions)
+    {
+        if (deduplicating) instructions = DedupTranspiler(instructions);
+        if (prechecking) instructions = MatchesTranspiler(instructions);
+        return instructions;
+    }
+
+    private static bool TakeOver(InventoryCraftingGrid __instance)
+    {
+        FindMatchingRecipe(__instance);
+        return false;
     }
 
     private static readonly MethodInfo VanillaAdd = AccessTools.Method(typeof(ListExtensions), nameof(ListExtensions.AddIfNotPresent))

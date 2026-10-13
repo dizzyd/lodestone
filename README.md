@@ -74,6 +74,25 @@ Recipe classes from other mods, and shapeless recipes, are always tested. Lookup
 5 ms or more are logged with their candidate count. `HANDBOOKPERF_NOCRAFTFIX=1` turns the
 fix off and leaves the timing on.
 
+### With OptiTime
+
+OptiTime replaces this lookup on the client with its own. Its version is ordered
+differently from vanilla's, and it reuses the grid's last recipe before trying shaped
+ones. So saw and log make planks, and adding a second log below them still gives planks
+where vanilla gives a bowstave. On a server without OptiTime the server crafts the
+bowstave, so the player sees one item and gets another.
+
+When OptiTime has patched the lookup, this mod's lookup runs in its place and the log
+says so. OptiTime's other optimizations, including its recipe matching, carry on. It
+patches after OptiTime does, because OptiTime saves its recipe lookup as off in the
+player's config when it finds another mod's patch already there. On the client that is
+when the world finishes loading. A singleplayer server shares the client's patches.
+
+Measured in-game on a pack of 24,870 grid recipes, filling recipes one ingredient at a
+time, the mean lookup is 6.7 ms in vanilla, 3.5 ms with OptiTime and 1.8 ms with this
+mod in OptiTime's place. Every one of 18,618 completed recipe grids picks the same
+recipe as vanilla (`tests/CraftingGridBench.cs`, run with vstestkit's client tier).
+
 ## Building
 
 ```bash

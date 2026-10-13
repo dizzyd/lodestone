@@ -14,8 +14,8 @@ using static VsTestkit.Testing.Vs;
 /// <summary>
 /// Times InventoryCraftingGrid.FindMatchingRecipe on the client under five patch sets,
 /// swapped in place in one session: vanilla, handbookperf's dedup alone (1.4.1),
-/// handbookperf with its slot count check, OptiTime's lookup, and handbookperf with OptiTime's
-/// GridRecipe.Matches prefix left on (the planned override). Each sample recipe is placed
+/// handbookperf with its slot count check, OptiTime's lookup, and handbookperf patched after
+/// OptiTime, as it is in game, where it runs in OptiTime's place. Each sample recipe is placed
 /// into the grid one ingredient at a time, one lookup per placement, as a player fills a
 /// grid. Also records which recipe each patch set picks for every grid state.
 /// </summary>
@@ -29,6 +29,7 @@ public class CraftingGridBench
     static MethodInfo matches = AccessTools.Method(typeof(GridRecipe), "Matches", [typeof(IPlayer), typeof(ItemSlot[]), typeof(int)])
         ?? AccessTools.Method(typeof(GridRecipe), "Matches", [typeof(IPlayer), typeof(IWorldAccessor), typeof(ItemSlot[]), typeof(int)]);
 
+    const string OptiTimeId = "com.zaldaryon.optitime";   // OptiTime's own
     static Type ot = AccessTools.TypeByName("OptiTime.RecipeLookupCacheOptimization");
     static Type hb = AccessTools.TypeByName("handbookperf.CraftingGridFix");
 
@@ -77,7 +78,7 @@ public class CraftingGridBench
             ("hp-dedup (1.4.1)", () => { ApplyHandbookPerf(); Unpatch("MatchesTranspiler"); }),
             ("handbookperf", ApplyHandbookPerf),
             ("optitime", ApplyOptiTime),
-            ("handbookperf+ot-matches", () => { ApplyHandbookPerf(); ApplyOptiTimeMatches(); }),
+            ("handbookperf over optitime", () => { ApplyOptiTime(); ApplyHandbookPerf(); }),
         };
 
         var cold = configs.ToDictionary(c => c.name, _ => new List<double>());
@@ -127,7 +128,7 @@ public class CraftingGridBench
         long b = Stopwatch.GetTimestamp();
         Call(grid);
         Log($"OptiTime first lookup incl. index build: {Stopwatch.GetElapsedTime(b).TotalMilliseconds:F1} ms");
-        ClearPatches();
+        Restore();
         SetGrid(grid, new ItemStack[width * width]);
         Call(grid);
 
@@ -197,6 +198,7 @@ public class CraftingGridBench
             if (pick != picks[i]) differ.Add($"{i}: vanilla={picks[i]} handbookperf={pick}");
             if (i % 50 == 0) await Frames.Wait(1);
         }
+        Restore();
         SetGrid(grid, new ItemStack[9]);
         Call(grid);
 
@@ -227,6 +229,14 @@ public class CraftingGridBench
         return placed;
     }
 
+    // The patches as the game made them: OptiTime's in StartClientSide, handbookperf's at LevelFinalize
+    static void Restore()
+    {
+        ClearPatches();
+        if (Capi.ModLoader.IsModEnabled("optitime")) ApplyOptiTime();
+        ApplyHandbookPerf();
+    }
+
     static void ClearPatches()
     {
         foreach (var m in new MethodBase[] { find, matches })
@@ -248,10 +258,10 @@ public class CraftingGridBench
     static void ApplyOptiTime()
     {
         ApplyOptiTimeMatches();
-        new Harmony("optitime").Patch(find, prefix: new HarmonyMethod(ot, "FindMatchingRecipe_Prefix"));
+        new Harmony(OptiTimeId).Patch(find, prefix: new HarmonyMethod(ot, "FindMatchingRecipe_Prefix"));
     }
 
-    static void ApplyOptiTimeMatches() => new Harmony("optitime").Patch(matches, prefix: new HarmonyMethod(ot, "MatchesWithWorld_Prefix"));
+    static void ApplyOptiTimeMatches() => new Harmony(OptiTimeId).Patch(matches, prefix: new HarmonyMethod(ot, "MatchesWithWorld_Prefix"));
 
     static void SetGrid(InventoryCraftingGrid grid, ItemStack[] stacks)
     {

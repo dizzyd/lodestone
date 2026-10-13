@@ -1,17 +1,19 @@
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Server;
 
 namespace handbookperf;
 
 public class HandbookPerfModSystem : ModSystem
 {
     // Both sides run the crafting grid's recipe lookup; only the client has a handbook
-    public override void Start(ICoreAPI api)
+    public override void StartServerSide(ICoreServerAPI api)
     {
-        // Start runs once per side, and in singleplayer both sides share this assembly,
-        // so CraftingGridFix checks whether it has already patched
-        CraftingGridFix.Apply(new Harmony(Mod.Info.ModID), Mod);
+        // OptiTime is client-only, so a dedicated server never has it. A singleplayer
+        // server shares the client's process and so its patches, and the client applies
+        // them once OptiTime has made its own.
+        if (api.Server.IsDedicated) CraftingGridFix.Apply(new Harmony(Mod.Info.ModID), Mod);
     }
 
     public override void StartClientSide(ICoreClientAPI api)
@@ -23,9 +25,16 @@ public class HandbookPerfModSystem : ModSystem
         LangLookupFix.Apply(harmony, Mod);
         BuildTiming.Apply(harmony, Mod.Logger);
 
-        // ARL patches in StartPre, but whether its patch is needed depends on the
-        // collectibles, which are only all present by LevelFinalize.
-        api.Event.LevelFinalize += () => ArlFilterFix.Apply(api, Mod);
+        api.Event.LevelFinalize += () =>
+        {
+            // OptiTime patches the crafting grid in its StartClientSide, and if another mod
+            // got there first it saves its recipe lookup as off in the player's config.
+            CraftingGridFix.Apply(harmony, Mod);
+
+            // ARL patches in StartPre, but whether its patch is needed depends on the
+            // collectibles, which are only all present by LevelFinalize.
+            ArlFilterFix.Apply(api, Mod);
+        };
     }
 
     public override void Dispose()
