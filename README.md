@@ -107,12 +107,29 @@ ingredients of thousands of recipes in a large pack (W4RD0's Furniture alone add
 1,100, one per wood type), so each add scans thousands of entries, and the grid gets
 slower with every slot filled.
 
-This mod swaps that call for a hash set check, on the client and on the server. Recipes compare by reference, as before,
-and the candidate list fills in the same order, so the same recipe is found. It also
-skips a shaped recipe without testing it when its ingredient count differs from the
-number of filled slots, since a shaped recipe fills exactly the slots its pattern names.
-Recipe classes from other mods, and shapeless recipes, are always tested. Lookups of
-5 ms or more are logged with their candidate count.
+For the player's 3x3 grid this mod finds the recipe without building that list, on the
+client and on the server. Vanilla's answer is the first recipe in its list, shaped ones
+first, that matches the grid, so any recipe that cannot match may be left out as long as
+the rest are tried in vanilla's order:
+
+- Each slot's stack is tested only against the ingredient keys it could satisfy: those
+  of the same item, and wildcard keys whose fixed prefix its code starts with.
+- A shaped recipe matches only a grid filled exactly where its pattern has ingredients,
+  so shaped recipes are looked up by the shape of the filled cells. Where it is safe to,
+  a recipe is also dropped unless every filled slot's stack is one of its ingredients.
+- The remaining recipes are tried in the order vanilla's list would hold them.
+
+Shapeless recipes, and recipe or ingredient classes from other mods, are tried without
+those filters, in the same order. Other grid sizes, and a slot holding an empty stack, go
+through vanilla's own loop, which this mod still speeds up: a hash set instead of
+`AddIfNotPresent`, and no `Matches` call on a shaped recipe whose ingredient count differs
+from the filled slots. Lookups of 5 ms or more are logged.
+
+Measured in-game on a pack of 24,870 grid recipes, filling recipes one ingredient at a
+time, the mean lookup is 6-8 ms in vanilla and 0.12-0.19 ms with this mod, and the
+slowest grid tested fell from 41 ms to 1.5 ms. Every one of 18,618 completed recipe
+grids gives the same recipe as vanilla (`tests/CraftingGridBench.cs`, run with
+vstestkit's client tier).
 
 ### With OptiTime
 
@@ -128,10 +145,8 @@ patches after OptiTime does, because OptiTime saves its recipe lookup as off in 
 player's config when it finds another mod's patch already there. On the client that is
 when the world finishes loading. A singleplayer server shares the client's patches.
 
-Measured in-game on a pack of 24,870 grid recipes, filling recipes one ingredient at a
-time, the mean lookup is 6.7 ms in vanilla, 3.5 ms with OptiTime and 1.8 ms with this
-mod in OptiTime's place. Every one of 18,618 completed recipe grids picks the same
-recipe as vanilla (`tests/CraftingGridBench.cs`, run with vstestkit's client tier).
+With OptiTime installed, the mean lookup measured 3.4 ms with OptiTime's and 0.12 ms
+with this mod's in its place.
 
 ## Building
 

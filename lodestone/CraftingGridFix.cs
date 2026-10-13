@@ -28,21 +28,34 @@ namespace lodestone;
 /// recipes. A shaped recipe matches only when the grid is filled exactly where its
 /// pattern has ingredients, so one whose ingredient count differs from the grid's
 /// filled slot count is skipped without the call.
+///
+/// Both of those keep vanilla's loop. For the player's 3x3 grid a prefix replaces it:
+/// GridLookupIndex gives the recipes that could match, in vanilla's list order, so the
+/// first that Matches is vanilla's recipe. Anything else, or a slot holding an empty
+/// stack, which vanilla's loop and Matches see differently, falls back to the loop.
 /// </summary>
 internal static class CraftingGridFix
 {
     private static ILogger logger;
     private static bool deduplicating;
     private static bool prechecking;
+    private static bool indexing;
+    private static bool optiTimeThere;
 
     [ThreadStatic] private static List<GridRecipe> currentList;
     [ThreadStatic] private static HashSet<GridRecipe> seen;
+
+    // The indexed lookup's scratch, and how many recipes it tried on the last call
+    [ThreadStatic] private static List<int>[] slotKeys;
+    [ThreadStatic] private static List<(GridRecipe recipe, int slot, int key, int pos)> shaped;
+    [ThreadStatic] private static HashSet<GridRecipe> considered;
+    [ThreadStatic] private static int indexedTries;
 
     public static string Mode
     {
         get
         {
-            string[] on = [deduplicating ? "hashed" : null, prechecking ? "counted" : null];
+            string[] on = [indexing ? "indexed" : null, deduplicating ? "hashed" : null, prechecking ? "counted" : null];
             return on.Any(m => m != null) ? string.Join(", ", on.Where(m => m != null)) : "vanilla";
         }
     }
@@ -75,7 +88,7 @@ internal static class CraftingGridFix
         prechecking = matches == 2;
         if (!prechecking) log.Warning("Not prechecking crafting grid recipes: expected two GridRecipe.Matches calls, found {0}", matches);
 
-        if (!deduplicating && !prechecking) return;
+        optiTimeThere = optiTime != null;
 
         // OptiTime replaces the method with a prefix that returns false, so the body these
         // transpilers rewrite would never run. Run a rewritten copy of vanilla's body from a
@@ -86,15 +99,93 @@ internal static class CraftingGridFix
         {
             Harmony.ReversePatch(find, new HarmonyMethod(typeof(CraftingGridFix), nameof(FindMatchingRecipe)),
                 AccessTools.Method(typeof(CraftingGridFix), nameof(ReverseTranspiler)));
-            var takeOver = new HarmonyMethod(typeof(CraftingGridFix), nameof(TakeOver)) { priority = Priority.First, before = [optiTime.owner] };
-            harmony.Patch(find, prefix: takeOver);
-            log.Notification("Finding crafting grid recipes in place of OptiTime's recipe lookup, which can pick a different recipe from vanilla's ({0}). OptiTime's other optimizations are unaffected", Mode);
-            return;
+        }
+        else
+        {
+            if (deduplicating) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(DedupTranspiler)));
+            if (prechecking) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(MatchesTranspiler)));
         }
 
-        if (deduplicating) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(DedupTranspiler)));
-        if (prechecking) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(MatchesTranspiler)));
-        log.Notification("Finding crafting grid recipes faster ({0})", Mode);
+        indexing = FoundMatch != null && GridSizeRef != null;
+        var lookup = new HarmonyMethod(typeof(CraftingGridFix), nameof(Lookup)) { priority = Priority.First, before = optiTime == null ? [] : [optiTime.owner] };
+        harmony.Patch(find, prefix: lookup);
+        if (optiTime != null) log.Notification("Finding crafting grid recipes in place of OptiTime's recipe lookup, which can pick a different recipe from vanilla's ({0}). OptiTime's other optimizations are unaffected", Mode);
+        else log.Notification("Finding crafting grid recipes faster ({0})", Mode);
+    }
+
+    // ---- the indexed lookup ----
+
+    private static readonly AccessTools.FieldRef<InventoryCraftingGrid, int> GridSizeRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, int>("GridSize");
+    private static readonly AccessTools.FieldRef<InventoryCraftingGrid, int> GridSizeSqRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, int>("GridSizeSq");
+    private static readonly AccessTools.FieldRef<InventoryCraftingGrid, ItemSlot[]> SlotsRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, ItemSlot[]>("slots");
+    private static readonly AccessTools.FieldRef<InventoryCraftingGrid, ItemSlotCraftingOutput> OutputRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, ItemSlotCraftingOutput>("outputSlot");
+    private static readonly AccessTools.FieldRef<InventoryBasePlayer, string> PlayerUidRef = AccessTools.FieldRefAccess<InventoryBasePlayer, string>("playerUID");
+    private static readonly Action<InventoryCraftingGrid, GridRecipe> FoundMatch =
+        AccessTools.MethodDelegate<Action<InventoryCraftingGrid, GridRecipe>>(AccessTools.Method(typeof(InventoryCraftingGrid), "FoundMatch"));
+
+    // Ahead of everything else on the method: false when it found vanilla's recipe itself
+    private static bool Lookup(InventoryCraftingGrid __instance)
+    {
+        indexedTries = -1;
+        if (indexing && Indexed(__instance)) return false;
+        if (!optiTimeThere) return true;   // vanilla's body, with the transpilers
+        FindMatchingRecipe(__instance);    // a copy of it, as OptiTime's prefix would skip it
+        return false;
+    }
+
+    /// <summary>FindMatchingRecipe for a 3x3 grid, through GridLookupIndex; false to leave it to vanilla's loop.</summary>
+    private static bool Indexed(InventoryCraftingGrid grid)
+    {
+        IWorldAccessor world = grid.Api?.World;
+        ItemSlot[] slots = SlotsRef(grid);
+        if (world?.FastSearchRecipesByIngredient == null || GridSizeRef(grid) != 3 || slots is not { Length: 9 }) return false;
+        foreach (ItemSlot slot in slots)
+        {
+            if (slot.Itemstack is { StackSize: 0 }) return false;
+        }
+
+        GridLookupIndex index = GridLookupIndex.For(world);
+        if (slotKeys == null)
+        {
+            slotKeys = new List<int>[9];
+            shaped = [];
+            considered = new HashSet<GridRecipe>(ReferenceEqualityComparer.Instance);
+        }
+        List<int>[] keys = new List<int>[9];
+        for (int i = 0; i < 9; i++)
+        {
+            if (!GridLookupIndex.Filled(slots[i])) continue;
+            index.KeysFor(slots[i].Itemstack, slotKeys[i] ??= []);
+            keys[i] = slotKeys[i];
+        }
+
+        // As vanilla does before it searches
+        grid.MatchingRecipe = null;
+        OutputRef(grid).Itemstack = null;
+        IPlayer player = world.PlayerByUid(PlayerUidRef(grid));
+
+        int tries = 0;
+        index.ShapedCandidates(keys, GridLookupIndex.GridShape(slots), shaped, considered);
+        foreach (var candidate in shaped)
+        {
+            tries++;
+            if (candidate.recipe.Matches(player, world, slots, 3)) return Found(grid, candidate.recipe, tries);
+        }
+        foreach (GridRecipe recipe in index.ShapelessCandidates(keys, considered))
+        {
+            tries++;
+            if (recipe.Matches(player, world, slots, 3)) return Found(grid, recipe, tries);
+        }
+        grid.dirtySlots.Add(GridSizeSqRef(grid));
+        indexedTries = tries;
+        return true;
+    }
+
+    private static bool Found(InventoryCraftingGrid grid, GridRecipe recipe, int tries)
+    {
+        FoundMatch(grid, recipe);
+        indexedTries = tries;
+        return true;
     }
 
     // OptiTime's patch class, which is steadier than its Harmony id
@@ -108,12 +199,6 @@ internal static class CraftingGridFix
         if (deduplicating) instructions = DedupTranspiler(instructions);
         if (prechecking) instructions = MatchesTranspiler(instructions);
         return instructions;
-    }
-
-    private static bool TakeOver(InventoryCraftingGrid __instance)
-    {
-        FindMatchingRecipe(__instance);
-        return false;
     }
 
     private static readonly MethodInfo VanillaAdd = AccessTools.Method(typeof(ListExtensions), nameof(ListExtensions.AddIfNotPresent))
@@ -177,12 +262,12 @@ internal static class CraftingGridFix
     private static void End(long __state)
     {
         double ms = Stopwatch.GetElapsedTime(__state).TotalMilliseconds;
-        int count = !deduplicating ? -1 : currentList != null ? seen.Count : 0;
+        string detail = indexedTries >= 0 ? $", trying {indexedTries} recipes"
+            : deduplicating && currentList != null ? $" over {seen.Count} candidate recipes" : "";
         currentList = null;   // don't pin the list between calls
         if (ms >= 5 && LodestoneModSystem.Config.LogTimings)
         {
-            logger.Notification("Crafting grid recipe lookup took {0:F1} ms{1} ({2})",
-                ms, count >= 0 ? $" over {count} candidate recipes" : "", Mode);
+            logger.Notification("Crafting grid recipe lookup took {0:F1} ms{1} ({2})", ms, detail, Mode);
         }
     }
 }
