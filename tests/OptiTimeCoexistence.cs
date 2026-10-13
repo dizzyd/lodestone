@@ -11,9 +11,9 @@ using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 
 /// <summary>
-/// With OptiTime installed, handbookperf patches the crafting grid after OptiTime has,
+/// With OptiTime installed, Lodestone patches the crafting grid after OptiTime has,
 /// so OptiTime's conflict check finds nothing and does not save its recipe lookup as
-/// off, and handbookperf's lookup then runs in place of OptiTime's. Needs OptiTime in
+/// off, and Lodestone's lookup then runs in place of OptiTime's. Needs OptiTime in
 /// the session's mods.
 /// </summary>
 public class OptiTimeCoexistence
@@ -35,7 +35,7 @@ public class OptiTimeCoexistence
 
     [VsTest]
     [RequiresClient]
-    public async Task HandbookPerfRunsAheadOfOptiTime()
+    public async Task LodestoneRunsAheadOfOptiTime()
     {
         await OnClient();
         if (!Capi.ModLoader.IsModEnabled("optitime")) Skip("OptiTime is not installed");
@@ -43,7 +43,7 @@ public class OptiTimeCoexistence
         var prefixes = Harmony.GetPatchInfo(find).Prefixes.OrderByDescending(p => p.priority).ToList();
         Log("Prefixes, in order: " + string.Join(", ", prefixes.Select(p => $"{p.owner}:{p.PatchMethod.Name}")));
         Assert.True(prefixes.Any(p => p.PatchMethod.DeclaringType?.FullName == "OptiTime.RecipeLookupCacheOptimization"));
-        int takeOver = prefixes.FindIndex(p => p.owner == "handbookperf" && p.PatchMethod.Name == "TakeOver");
+        int takeOver = prefixes.FindIndex(p => p.owner == "lodestone" && p.PatchMethod.Name == "TakeOver");
         int optiTime = prefixes.FindIndex(p => p.PatchMethod.DeclaringType?.FullName == "OptiTime.RecipeLookupCacheOptimization");
         Assert.True(takeOver >= 0 && takeOver < optiTime);
 

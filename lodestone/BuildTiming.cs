@@ -5,7 +5,7 @@ using HarmonyLib;
 using Vintagestory.API.Common;
 using Vintagestory.GameContent;
 
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
 /// Logs how long the handbook took to build its pages, and how much of that went to

@@ -11,7 +11,7 @@ using static VsTestkit.Testing.Vs;
 
 /// <summary>
 /// How long the survival handbook's first page build takes after joining, with or
-/// without handbookperf: nothing else runs while it waits. The build starts at
+/// without lodestone: nothing else runs while it waits. The build starts at
 /// LevelFinalize, which vanilla marks in the debug log, and ends when the dialog's
 /// loadingPagesAsync goes false. The log has one-second resolution.
 /// </summary>
@@ -38,8 +38,8 @@ public class HandbookBuildTime
         DateTime start = DateTime.ParseExact(startLine[..19], "dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
 
         int pages = ((System.Collections.ICollection)AccessTools.Field(typeof(GuiDialogHandbook), "allHandbookPages").GetValue(dialog)).Count;
-        bool handbookperf = Capi.ModLoader.IsModEnabled("handbookperf");
-        Log($"handbookperf {(handbookperf ? "on" : "off")}; {Capi.ModLoader.Mods.Count()} mods; {pages} pages");
+        bool lodestone = Capi.ModLoader.IsModEnabled("lodestone");
+        Log($"lodestone {(lodestone ? "on" : "off")}; {Capi.ModLoader.Mods.Count()} mods; {pages} pages");
         Log(wasLoading
             ? $"First page build: {(end - start).TotalSeconds:F0} s (started {start:HH:mm:ss}, done {end:HH:mm:ss})"
             : $"First page build finished before the test started, within {(end - start).TotalSeconds:F0} s");

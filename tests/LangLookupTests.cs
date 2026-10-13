@@ -27,7 +27,7 @@ public class LangLookupTests
         {
             var info = Harmony.GetPatchInfo(m);
             Log($"{m.Name}: prefixes {Describe(info?.Prefixes)}; transpilers {Describe(info?.Transpilers)}");
-            Assert.True(info?.Prefixes.Any(p => p.owner == "handbookperf") == true);
+            Assert.True(info?.Prefixes.Any(p => p.owner == "lodestone") == true);
         }
         if (Capi.ModLoader.IsModEnabled("optitime"))
             Assert.True(Harmony.GetPatchInfo(hasTranslation).Transpilers.Any(p => p.PatchMethod.DeclaringType?.FullName == "OptiTime.TranslationServicePatch"));
@@ -54,9 +54,9 @@ public class LangLookupTests
         var ours = Answers(keys);
         await Frames.Wait(1);
 
-        var harmony = new Harmony("handbookperf");
-        harmony.Unpatch(hasTranslation, HarmonyPatchType.Prefix, "handbookperf");
-        harmony.Unpatch(getMatchingIfExists, HarmonyPatchType.Prefix, "handbookperf");
+        var harmony = new Harmony("lodestone");
+        harmony.Unpatch(hasTranslation, HarmonyPatchType.Prefix, "lodestone");
+        harmony.Unpatch(getMatchingIfExists, HarmonyPatchType.Prefix, "lodestone");
         List<(bool, string)> vanilla;
         try
         {
@@ -64,14 +64,14 @@ public class LangLookupTests
         }
         finally
         {
-            var apply = AccessTools.TypeByName("handbookperf.LangLookupFix").GetMethod("Apply", BindingFlags.Public | BindingFlags.Static);
-            apply.Invoke(null, [harmony, Capi.ModLoader.GetMod("handbookperf")]);
+            var apply = AccessTools.TypeByName("lodestone.LangLookupFix").GetMethod("Apply", BindingFlags.Public | BindingFlags.Static);
+            apply.Invoke(null, [harmony, Capi.ModLoader.GetMod("lodestone")]);
         }
 
         // Applied again with OptiTime's transpiler already there, as when OptiTime's
         // StartClientSide runs first: both methods must still be indexed
         foreach (var m in new[] { hasTranslation, getMatchingIfExists })
-            Assert.True(Harmony.GetPatchInfo(m).Prefixes.Any(p => p.owner == "handbookperf"));
+            Assert.True(Harmony.GetPatchInfo(m).Prefixes.Any(p => p.owner == "lodestone"));
 
         int found = ours.Count(a => a.Item2 != null);
         var differ = Enumerable.Range(0, keys.Count).Where(i => ours[i] != vanilla[i]).ToList();

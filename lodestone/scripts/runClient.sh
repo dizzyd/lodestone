@@ -9,7 +9,7 @@ CONFIGURATION=$3
 cd ${VINTAGE_STORY}
 ./Vintagestory \
    --playStyle "creativebuilding" \
-   --openWorld "handbookperfcreative" \
+   --openWorld "lodestonecreative" \
    --addModPath ${PROJECT_DIR}/bin/${CONFIGURATION}/Mods \
    --dataPath $VS_DEV_DATA \
    --addOrigin ${PROJECT_DIR}/assets \

@@ -12,7 +12,7 @@ using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 
 /// <summary>
-/// handbookperf's empty-search shortcut shows the pages vanilla's FilterItems would, and,
+/// Lodestone's empty-search shortcut shows the pages vanilla's FilterItems would, and,
 /// with Attribute Rendering Library's prefix on, the pages ARL's would, its exclusions
 /// included. Needs ARL in the session's mods for the second.
 /// </summary>
@@ -37,13 +37,13 @@ public class HandbookSearchTests
     {
         await OnClient();   // here, not in Dialog(): an await resumes on the thread it was made from
         var (dialog, category) = await Dialog();
-        var ours = Harmony.GetPatchInfo(filterItems).Prefixes.First(p => p.owner == "handbookperf");
+        var ours = Harmony.GetPatchInfo(filterItems).Prefixes.First(p => p.owner == "lodestone");
         Log("FilterItems prefixes: " + string.Join(", ", Harmony.GetPatchInfo(filterItems).Prefixes.Select(p => $"{p.owner}:{p.PatchMethod.Name}")));
         Assert.False(Harmony.GetPatchInfo(filterItems).Prefixes.Any(p => p.owner == ArlId));   // ArlFilterFix took it off in this pack
 
         var (fast, tFast) = await Run(dialog, category);
-        var harmony = new Harmony("handbookperf");
-        harmony.Unpatch(filterItems, HarmonyPatchType.Prefix, "handbookperf");
+        var harmony = new Harmony("lodestone");
+        harmony.Unpatch(filterItems, HarmonyPatchType.Prefix, "lodestone");
         try
         {
             var (vanilla, tVanilla) = await Run(dialog, category);
@@ -64,19 +64,19 @@ public class HandbookSearchTests
         var (dialog, category) = await Dialog();
         var arlPrefix = AccessTools.TypeByName("AttributeRenderingLibrary.HarmonyPatches.Handbook.GuiDialogHandbook_FilterItems_Patch")?.GetMethod("Prefix");
         if (arlPrefix == null) Skip("ARL is not installed");
-        var ours = Harmony.GetPatchInfo(filterItems).Prefixes.First(p => p.owner == "handbookperf");
+        var ours = Harmony.GetPatchInfo(filterItems).Prefixes.First(p => p.owner == "lodestone");
 
         // Hide every plank page, as an item using ARL's excludeFromHandbookSearch would
         var planks = Capi.World.Collectibles.Where(c => c?.Code?.Path.StartsWith("plank-") == true).ToList();
         foreach (var c in planks) c.CollectibleBehaviors = c.CollectibleBehaviors.Append(new HideFromSearch(c)).ToArray();
         var arl = new Harmony(ArlId);
-        var harmony = new Harmony("handbookperf");
+        var harmony = new Harmony("lodestone");
         arl.Patch(filterItems, prefix: new HarmonyMethod(arlPrefix));
         try
         {
             Log($"Hiding {planks.Count} plank collectibles; FilterItems prefixes: " + string.Join(", ", Harmony.GetPatchInfo(filterItems).Prefixes.Select(p => $"{p.owner}:{p.PatchMethod.Name}")));
             // ARL's alone first, so neither pass pays the other's warm-up
-            harmony.Unpatch(filterItems, HarmonyPatchType.Prefix, "handbookperf");
+            harmony.Unpatch(filterItems, HarmonyPatchType.Prefix, "lodestone");
             await Run(dialog, category);
             var (arlOnly, tArl) = await Run(dialog, category);
             harmony.Patch(filterItems, prefix: new HarmonyMethod(ours.PatchMethod) { priority = ours.priority, before = ours.before });
@@ -90,7 +90,7 @@ public class HandbookSearchTests
         finally
         {
             arl.Unpatch(filterItems, HarmonyPatchType.Prefix, ArlId);
-            harmony.Unpatch(filterItems, HarmonyPatchType.Prefix, "handbookperf");
+            harmony.Unpatch(filterItems, HarmonyPatchType.Prefix, "lodestone");
             harmony.Patch(filterItems, prefix: new HarmonyMethod(ours.PatchMethod) { priority = ours.priority, before = ours.before });
             foreach (var c in planks) c.CollectibleBehaviors = c.CollectibleBehaviors.Where(b => b is not HideFromSearch).ToArray();
             Reset(dialog);
@@ -138,7 +138,7 @@ public class HandbookSearchTests
         {
             string label = $"\"{Searches[s].text}\"" + (Searches[s].category ? " in category" : "");
             int count = expected[s].Length == 0 ? 0 : expected[s].Count(ch => ch == ',') + 1;
-            Log($"{label,-18} {count,6} shown   {baseline} {tExpected[s],7:F1} ms   handbookperf {tActual[s],7:F1} ms   {(actual[s] == expected[s] ? "same pages" : "DIFFERENT PAGES")}");
+            Log($"{label,-18} {count,6} shown   {baseline} {tExpected[s],7:F1} ms   lodestone {tActual[s],7:F1} ms   {(actual[s] == expected[s] ? "same pages" : "DIFFERENT PAGES")}");
         }
         Assert.Equal(0, Enumerable.Range(0, Searches.Length).Count(s => actual[s] != expected[s]));
     }

@@ -14,7 +14,7 @@ using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 
 /// <summary>
-/// The handbook's and ACA's CreateCachedMealRecipeStacks with handbookperf's narrowed
+/// The handbook's and ACA's CreateCachedMealRecipeStacks with Lodestone's narrowed
 /// stack array find the same stacks, in the same order, as with the full array, and how
 /// long each takes. Needs ACA in the session's mods, as the narrowing works on its matcher.
 /// </summary>
@@ -54,12 +54,12 @@ public class MealMatchingTests
         {
             var body = Lambda(create);
             Log($"{name}: transpilers on its lambda: {string.Join(", ", Harmony.GetPatchInfo(body)?.Transpilers.Select(p => p.owner) ?? [])}");
-            Assert.True(Harmony.GetPatchInfo(body)?.Transpilers.Any(p => p.owner == "handbookperf") == true);
+            Assert.True(Harmony.GetPatchInfo(body)?.Transpilers.Any(p => p.owner == "lodestone") == true);
 
             // Full, narrowed, full again: the two full passes show whether a pass alone changes anything
-            var harmony = new Harmony("handbookperf");
-            var transpiler = Harmony.GetPatchInfo(body).Transpilers.First(p => p.owner == "handbookperf").PatchMethod;
-            harmony.Unpatch(body, HarmonyPatchType.Transpiler, "handbookperf");
+            var harmony = new Harmony("lodestone");
+            var transpiler = Harmony.GetPatchInfo(body).Transpilers.First(p => p.owner == "lodestone").PatchMethod;
+            harmony.Unpatch(body, HarmonyPatchType.Transpiler, "lodestone");
             List<string> full, again, narrowed;
             double tFull, tNarrowed;
             try
@@ -67,7 +67,7 @@ public class MealMatchingTests
                 (full, tFull) = await Run(run, sample);
                 harmony.Patch(body, transpiler: new HarmonyMethod(transpiler));
                 (narrowed, tNarrowed) = await Run(run, sample);
-                harmony.Unpatch(body, HarmonyPatchType.Transpiler, "handbookperf");
+                harmony.Unpatch(body, HarmonyPatchType.Transpiler, "lodestone");
                 (again, _) = await Run(run, sample);
             }
             finally

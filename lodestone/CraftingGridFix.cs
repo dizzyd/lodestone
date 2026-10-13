@@ -9,7 +9,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 using Vintagestory.Common;
 
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
 /// Every change to a crafting grid slot makes InventoryCraftingGrid.FindMatchingRecipe
@@ -179,7 +179,7 @@ internal static class CraftingGridFix
         double ms = Stopwatch.GetElapsedTime(__state).TotalMilliseconds;
         int count = !deduplicating ? -1 : currentList != null ? seen.Count : 0;
         currentList = null;   // don't pin the list between calls
-        if (ms >= 5 && HandbookPerfModSystem.Config.LogTimings)
+        if (ms >= 5 && LodestoneModSystem.Config.LogTimings)
         {
             logger.Notification("Crafting grid recipe lookup took {0:F1} ms{1} ({2})",
                 ms, count >= 0 ? $" over {count} candidate recipes" : "", Mode);

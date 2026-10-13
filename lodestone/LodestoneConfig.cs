@@ -1,12 +1,12 @@
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
-/// ModConfig/handbookperf.json. Each fix can be turned off on its own; a change takes
+/// ModConfig/lodestone.json. Each fix can be turned off on its own; a change takes
 /// effect the next time a world loads.
 /// </summary>
-public class HandbookPerfConfig
+public class LodestoneConfig
 {
-    public const string FileName = "handbookperf.json";
+    public const string FileName = "lodestone.json";
 
     /// <summary>
     /// Answer lang lookups that miss an exact key from an index of the wildcard keys,

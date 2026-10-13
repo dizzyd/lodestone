@@ -13,8 +13,8 @@ using static VsTestkit.Testing.Vs;
 
 /// <summary>
 /// Times InventoryCraftingGrid.FindMatchingRecipe on the client under five patch sets,
-/// swapped in place in one session: vanilla, handbookperf's dedup alone (1.4.1),
-/// handbookperf with its slot count check, OptiTime's lookup, and handbookperf patched after
+/// swapped in place in one session: vanilla, Lodestone's dedup alone (1.4.1),
+/// Lodestone with its slot count check, OptiTime's lookup, and Lodestone patched after
 /// OptiTime, as it is in game, where it runs in OptiTime's place. Each sample recipe is placed
 /// into the grid one ingredient at a time, one lookup per placement, as a player fills a
 /// grid. Also records which recipe each patch set picks for every grid state.
@@ -31,7 +31,7 @@ public class CraftingGridBench
 
     const string OptiTimeId = "com.zaldaryon.optitime";   // OptiTime's own
     static Type ot = AccessTools.TypeByName("OptiTime.RecipeLookupCacheOptimization");
-    static Type hb = AccessTools.TypeByName("handbookperf.CraftingGridFix");
+    static Type hb = AccessTools.TypeByName("lodestone.CraftingGridFix");
 
     [VsTest(TimeoutMs = 1_800_000)]
     [RequiresClient]
@@ -48,7 +48,7 @@ public class CraftingGridBench
         Log($"GridRecipes: {world.GridRecipes.Count}; ingredient keys: {world.FastSearchRecipesByIngredient.Count}");
         Log("By domain: " + string.Join(", ", world.GridRecipes.GroupBy(r => r.Name?.Domain).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}")));
         Log($"Patches at start on FindMatchingRecipe: {Owners(find)}; on Matches: {Owners(matches)}");
-        Log($"handbookperf mode: {hb.GetProperty("Mode").GetValue(null)}");
+        Log($"lodestone mode: {hb.GetProperty("Mode").GetValue(null)}");
 
         // Recipes a 3x3 grid can hold whose every ingredient is one exact stack
         var usable = Usable(world);
@@ -75,10 +75,10 @@ public class CraftingGridBench
         var configs = new (string name, Action apply)[]
         {
             ("vanilla", () => { }),
-            ("hp-dedup (1.4.1)", () => { ApplyHandbookPerf(); Unpatch("MatchesTranspiler"); }),
-            ("handbookperf", ApplyHandbookPerf),
+            ("dedup only (1.4.1)", () => { ApplyLodestone(); Unpatch("MatchesTranspiler"); }),
+            ("lodestone", ApplyLodestone),
             ("optitime", ApplyOptiTime),
-            ("handbookperf over optitime", () => { ApplyOptiTime(); ApplyHandbookPerf(); }),
+            ("lodestone over optitime", () => { ApplyOptiTime(); ApplyLodestone(); }),
         };
 
         var cold = configs.ToDictionary(c => c.name, _ => new List<double>());
@@ -160,10 +160,10 @@ public class CraftingGridBench
     }
 
     static void Unpatch(string transpiler) =>
-        new Harmony("handbookperf").Unpatch(find, hb.GetMethod(transpiler, BindingFlags.NonPublic | BindingFlags.Static));
+        new Harmony("lodestone").Unpatch(find, hb.GetMethod(transpiler, BindingFlags.NonPublic | BindingFlags.Static));
 
     /// <summary>
-    /// Every usable recipe's completed grid, looked up under vanilla and under handbookperf:
+    /// Every usable recipe's completed grid, looked up under vanilla and under lodestone:
     /// the same recipe must come back for each.
     /// </summary>
     [VsTest(TimeoutMs = 1_800_000)]
@@ -185,8 +185,8 @@ public class CraftingGridBench
             if (i % 50 == 0) await Frames.Wait(1);
         }
 
-        ApplyHandbookPerf();
-        Log($"handbookperf mode: {hb.GetProperty("Mode").GetValue(null)}");
+        ApplyLodestone();
+        Log($"lodestone mode: {hb.GetProperty("Mode").GetValue(null)}");
         var differ = new List<string>();
         int matched = 0;
         for (int i = 0; i < grids.Count; i++)
@@ -195,7 +195,7 @@ public class CraftingGridBench
             Call(grid);
             string pick = grid.MatchingRecipe?.Name?.ToString() ?? "-";
             if (pick != "-") matched++;
-            if (pick != picks[i]) differ.Add($"{i}: vanilla={picks[i]} handbookperf={pick}");
+            if (pick != picks[i]) differ.Add($"{i}: vanilla={picks[i]} lodestone={pick}");
             if (i % 50 == 0) await Frames.Wait(1);
         }
         Restore();
@@ -229,12 +229,12 @@ public class CraftingGridBench
         return placed;
     }
 
-    // The patches as the game made them: OptiTime's in StartClientSide, handbookperf's at LevelFinalize
+    // The patches as the game made them: OptiTime's in StartClientSide, Lodestone's at LevelFinalize
     static void Restore()
     {
         ClearPatches();
         if (Capi.ModLoader.IsModEnabled("optitime")) ApplyOptiTime();
-        ApplyHandbookPerf();
+        ApplyLodestone();
     }
 
     static void ClearPatches()
@@ -247,10 +247,10 @@ public class CraftingGridBench
         }
     }
 
-    // handbookperf's own Apply, as the mod runs it
-    static void ApplyHandbookPerf()
+    // Lodestone's own Apply, as the mod runs it
+    static void ApplyLodestone()
     {
-        var mod = Capi.ModLoader.GetMod("handbookperf");
+        var mod = Capi.ModLoader.GetMod("lodestone");
         hb.GetMethod("Apply", BindingFlags.Public | BindingFlags.Static).Invoke(null, [new Harmony(mod.Info.ModID), mod, true]);
     }
 

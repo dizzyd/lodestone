@@ -21,7 +21,7 @@ public class ArlFilterBench
 {
     const int Rounds = 3;
     const string ArlId = "attributerenderinglibrary";
-    const string BenchId = "handbookperf.arlbench";
+    const string BenchId = "lodestone.arlbench";
 
     static readonly string[] Searches = ["", "c", "co", "cop", "copp", "coppe", "copper", "oak plank", "bread", "zzzz"];
 
@@ -48,9 +48,9 @@ public class ArlFilterBench
         var before = Harmony.GetPatchInfo(filterItems);
         Log($"{all.Count} pages; FilterItems prefixes at start: {string.Join(", ", before?.Prefixes.Select(p => p.owner) ?? [])}");
 
-        // handbookperf's empty-search listing runs ahead of both and would answer the empty search
-        Patch ours = before?.Prefixes.FirstOrDefault(p => p.owner == "handbookperf");
-        if (ours != null) new Harmony("handbookperf").Unpatch(filterItems, HarmonyPatchType.Prefix, "handbookperf");
+        // Lodestone's empty-search listing runs ahead of both and would answer the empty search
+        Patch ours = before?.Prefixes.FirstOrDefault(p => p.owner == "lodestone");
+        if (ours != null) new Harmony("lodestone").Unpatch(filterItems, HarmonyPatchType.Prefix, "lodestone");
 
         var configs = new (string name, Action apply)[]
         {
@@ -90,7 +90,7 @@ public class ArlFilterBench
             // Back to what the session had: ARL's prefix only if it was there
             Reset(arlPrefix);
             if (before?.Prefixes.Any(p => p.owner == ArlId) == true) new Harmony(ArlId).Patch(filterItems, prefix: new HarmonyMethod(arlPrefix));
-            if (ours != null) new Harmony("handbookperf").Patch(filterItems, prefix: new HarmonyMethod(ours.PatchMethod) { priority = ours.priority, before = ours.before });
+            if (ours != null) new Harmony("lodestone").Patch(filterItems, prefix: new HarmonyMethod(ours.PatchMethod) { priority = ours.priority, before = ours.before });
             searchText.SetValue(dialog, "");
             dialog.FilterItems();
         }

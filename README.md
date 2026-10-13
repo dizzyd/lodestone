@@ -1,8 +1,8 @@
-# Handbook and Crafting Performance Fixes
+# Lodestone
 
 Fixes for a slow handbook and a laggy crafting grid in large packs. The fixes for other
 mods only apply when the mod they work around is installed. The log says what was done
-(`[handbookperf]`).
+(`[lodestone]`).
 
 It is optional on both sides: players can join a server without it, and a server can run
 it without players having it. The handbook fixes run on the client. The crafting grid fix
@@ -11,7 +11,7 @@ every player's crafting grid.
 
 ## Settings
 
-`ModConfig/handbookperf.json` turns each fix off on its own. Every setting is on by
+`ModConfig/lodestone.json` turns each fix off on its own. Every setting is on by
 default, and a change takes effect the next time a world loads.
 
 | Setting | What it turns off |
@@ -53,7 +53,7 @@ Each world join logs how long the handbook took to build its pages and how much 
 was meal-recipe matching:
 
 ```
-[handbookperf] GuiDialogSurvivalHandbook built its pages in 5.2 s, 4.4 s of it matching meal recipe ingredients (indexed)
+[lodestone] GuiDialogSurvivalHandbook built its pages in 5.2 s, 4.4 s of it matching meal recipe ingredients (indexed)
 ```
 
 ## Vanilla lang lookups: every page build scans every wildcard key

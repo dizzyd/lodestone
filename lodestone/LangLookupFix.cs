@@ -8,7 +8,7 @@ using HarmonyLib;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
 /// A lang key with no exact entry makes TranslationService try every wildcard key

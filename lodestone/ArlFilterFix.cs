@@ -6,7 +6,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.GameContent;
 
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
 /// Attribute Rendering Library replaces GuiDialogHandbook.FilterItems with a copy of

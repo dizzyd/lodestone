@@ -4,33 +4,33 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
-namespace handbookperf;
+namespace lodestone;
 
-public class HandbookPerfModSystem : ModSystem
+public class LodestoneModSystem : ModSystem
 {
-    public static HandbookPerfConfig Config { get; private set; } = new();
+    public static LodestoneConfig Config { get; private set; } = new();
 
     public override void StartPre(ICoreAPI api)
     {
         Config = LoadConfig(api);
     }
 
-    private HandbookPerfConfig LoadConfig(ICoreAPI api)
+    private LodestoneConfig LoadConfig(ICoreAPI api)
     {
-        HandbookPerfConfig config;
+        LodestoneConfig config;
         try
         {
-            config = api.LoadModConfig<HandbookPerfConfig>(HandbookPerfConfig.FileName);
+            config = api.LoadModConfig<LodestoneConfig>(LodestoneConfig.FileName);
         }
         catch (Exception e)
         {
-            Mod.Logger.Error("Could not read {0}, using defaults: {1}", HandbookPerfConfig.FileName, e.Message);
-            return new HandbookPerfConfig();
+            Mod.Logger.Error("Could not read {0}, using defaults: {1}", LodestoneConfig.FileName, e.Message);
+            return new LodestoneConfig();
         }
 
         // Written back so a new setting appears in the file with its default
-        config ??= new HandbookPerfConfig();
-        api.StoreModConfig(config, HandbookPerfConfig.FileName);
+        config ??= new LodestoneConfig();
+        api.StoreModConfig(config, LodestoneConfig.FileName);
         return config;
     }
 
@@ -70,7 +70,7 @@ public class HandbookPerfModSystem : ModSystem
 
     private bool Enabled(bool setting, string fix)
     {
-        if (!setting) Mod.Logger.Notification("{0} off in {1}", fix, HandbookPerfConfig.FileName);
+        if (!setting) Mod.Logger.Notification("{0} off in {1}", fix, LodestoneConfig.FileName);
         return setting;
     }
 

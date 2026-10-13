@@ -12,7 +12,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
 /// A Culinary Artillery replaces CookingRecipeIngredient.GetMatchingStack with a prefix

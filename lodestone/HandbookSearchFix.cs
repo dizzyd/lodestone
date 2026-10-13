@@ -7,7 +7,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.GameContent;
 
-namespace handbookperf;
+namespace lodestone;
 
 /// <summary>
 /// The handbook runs GuiDialogHandbook.FilterItems each time it opens or changes tab.

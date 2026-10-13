@@ -11,7 +11,7 @@ using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 
 /// <summary>
-/// Each fix's patches are there exactly when ModConfig/handbookperf.json turns it on.
+/// Each fix's patches are there exactly when ModConfig/lodestone.json turns it on.
 /// Run once per config to check: the file is read as the session left it.
 /// </summary>
 public class ConfigTests
@@ -21,7 +21,7 @@ public class ConfigTests
     public async Task PatchesFollowTheConfig()
     {
         await OnClient();
-        string path = Path.Combine(Capi.DataBasePath, "ModConfig", "handbookperf.json");
+        string path = Path.Combine(Capi.DataBasePath, "ModConfig", "lodestone.json");
         Assert.True(File.Exists(path));
         var config = JObject.Parse(File.ReadAllText(path));
         Log("Config: " + string.Join(", ", config.Properties().Select(p => $"{p.Name}={p.Value}")));
@@ -45,7 +45,7 @@ public class ConfigTests
             Ours(AccessTools.Method(typeof(GuiDialogHandbook), "LoadPages_Async")));
     }
 
-    static bool Ours(MethodBase method) => Harmony.GetPatchInfo(method)?.Owners.Contains("handbookperf") == true;
+    static bool Ours(MethodBase method) => Harmony.GetPatchInfo(method)?.Owners.Contains("lodestone") == true;
 
     static void Check(string setting, bool expected, bool patched)
     {
