@@ -67,7 +67,10 @@ ingredients of thousands of recipes in a large pack (W4RD0's Furniture alone add
 slower with every slot filled.
 
 This mod swaps that call for a hash set check, on the client and on the server. Recipes compare by reference, as before,
-and the candidate list fills in the same order, so the same recipe is found. Lookups of
+and the candidate list fills in the same order, so the same recipe is found. It also
+skips a shaped recipe without testing it when its ingredient count differs from the
+number of filled slots, since a shaped recipe fills exactly the slots its pattern names.
+Recipe classes from other mods, and shapeless recipes, are always tested. Lookups of
 5 ms or more are logged with their candidate count. `HANDBOOKPERF_NOCRAFTFIX=1` turns the
 fix off and leaves the timing on.
 
