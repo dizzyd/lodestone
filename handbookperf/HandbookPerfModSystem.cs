@@ -34,6 +34,7 @@ public class HandbookPerfModSystem : ModSystem
             // ARL patches in StartPre, but whether its patch is needed depends on the
             // collectibles, which are only all present by LevelFinalize.
             ArlFilterFix.Apply(api, Mod);
+            HandbookSearchFix.Apply(harmony, Mod);
         };
     }
 

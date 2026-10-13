@@ -59,16 +59,29 @@ safe to add to from the handbook's thread, and this mod's version does that itse
 Checked against vanilla on this pack's tables
 (31k exact, 4k wildcard and 600 regex keys): identical results on 97k lookups.
 
-## Attribute Rendering Library: handbook stalls on every open
+## Vanilla handbook search: every open counts matches in every page
+
+The handbook runs its search each time it opens or changes tab. With the search box
+empty, vanilla's search pattern is an empty group, which matches at every character, so
+it counts a match per character in every page's title and text only to show every page.
+With 21,000 pages that took 0.7-0.8 s per open. An empty search shows every non-duplicate
+page of the tab, in order, so this mod lists them directly: 3 ms. Searches with text, or
+only spaces, run as before.
+
+## Attribute Rendering Library: slower handbook search
 
 ARL replaces the handbook's `FilterItems` with a copy of vanilla's that also hides pages
-for items using its `AttributeRenderingLibrary.Handbook` behaviour. The copy
-regex-scans every page's text each time it runs and reaches `CountMatches` through
-reflection. Because it returns `false`, it also stops BetterHandbook's cached filter
-from running.
+for items using its `AttributeRenderingLibrary.Handbook` behaviour. The copy looks that
+behaviour up for every page and reaches `CountMatches` through reflection, which adds
+25-30 ms per keystroke with 21,000 pages. Because it returns `false`, it also stops
+BetterHandbook's cached filter from running.
 
 When no collectible uses that exclusion, this mod removes ARL's prefix. If any does, it
-leaves the prefix alone.
+leaves the prefix alone. It only does this for ARL 3.2.x, whose prefix has been checked
+to add nothing else; for any other version it leaves the prefix and says so in the log.
+
+While ARL's prefix is there, the empty-search listing above runs ahead of it and hides
+the same pages ARL would: 17 ms per open instead of 740 ms.
 
 ## Vanilla crafting grid: every slot change rescans thousands of recipes
 
