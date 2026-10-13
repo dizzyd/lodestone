@@ -251,7 +251,7 @@ public class CraftingGridBench
     static void ApplyHandbookPerf()
     {
         var mod = Capi.ModLoader.GetMod("handbookperf");
-        hb.GetMethod("Apply", BindingFlags.Public | BindingFlags.Static).Invoke(null, [new Harmony(mod.Info.ModID), mod]);
+        hb.GetMethod("Apply", BindingFlags.Public | BindingFlags.Static).Invoke(null, [new Harmony(mod.Info.ModID), mod, true]);
     }
 
     // The two patches OptiTime makes in StartClientSide when nothing else is there
