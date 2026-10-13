@@ -48,6 +48,10 @@ public class ArlFilterBench
         var before = Harmony.GetPatchInfo(filterItems);
         Log($"{all.Count} pages; FilterItems prefixes at start: {string.Join(", ", before?.Prefixes.Select(p => p.owner) ?? [])}");
 
+        // handbookperf's empty-search listing runs ahead of both and would answer the empty search
+        Patch ours = before?.Prefixes.FirstOrDefault(p => p.owner == "handbookperf");
+        if (ours != null) new Harmony("handbookperf").Unpatch(filterItems, HarmonyPatchType.Prefix, "handbookperf");
+
         var configs = new (string name, Action apply)[]
         {
             ("ARL's prefix", () => new Harmony(ArlId).Patch(filterItems, prefix: new HarmonyMethod(arlPrefix))),
@@ -86,6 +90,7 @@ public class ArlFilterBench
             // Back to what the session had: ARL's prefix only if it was there
             Reset(arlPrefix);
             if (before?.Prefixes.Any(p => p.owner == ArlId) == true) new Harmony(ArlId).Patch(filterItems, prefix: new HarmonyMethod(arlPrefix));
+            if (ours != null) new Harmony("handbookperf").Patch(filterItems, prefix: new HarmonyMethod(ours.PatchMethod) { priority = ours.priority, before = ours.before });
             searchText.SetValue(dialog, "");
             dialog.FilterItems();
         }
