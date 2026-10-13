@@ -5,7 +5,7 @@
     "authors": [
         "DizzyD"
     ],
-    "description": "Fixes for slow handbook loading and opening, and a laggy crafting grid, in large packs. Optional on both client and server.",
+    "description": "Optimizations for large modpacks: faster handbook loading and search, lang lookups and crafting grid, with the same results as vanilla. Optional on both client and server.",
     "version": "1.4.1",
     "side": "Universal",
     "requiredOnClient": false,

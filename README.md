@@ -1,8 +1,9 @@
 # Lodestone
 
-Fixes for a slow handbook and a laggy crafting grid in large packs. The fixes for other
-mods only apply when the mod they work around is installed. The log says what was done
-(`[lodestone]`).
+Optimizations for large modpacks. Lodestone speeds up the handbook, lang lookups and the
+crafting grid, which all get slower as a pack grows, and every fix gives the same results
+as vanilla. The fixes for other mods only apply when the mod they work around is
+installed. The log says what was done (`[lodestone]`).
 
 It is optional on both sides: players can join a server without it, and a server can run
 it without players having it. The handbook fixes run on the client. The crafting grid fix
