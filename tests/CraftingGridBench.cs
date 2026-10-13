@@ -12,12 +12,13 @@ using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 
 /// <summary>
-/// Times InventoryCraftingGrid.FindMatchingRecipe on the client under five patch sets,
-/// swapped in place in one session: vanilla, Lodestone's dedup alone (1.4.1),
-/// Lodestone with its slot count check, OptiTime's lookup, and Lodestone patched after
-/// OptiTime, as it is in game, where it runs in OptiTime's place. Each sample recipe is placed
-/// into the grid one ingredient at a time, one lookup per placement, as a player fills a
-/// grid. Also records which recipe each patch set picks for every grid state.
+/// Times InventoryCraftingGrid.FindMatchingRecipe on the client under six patch sets,
+/// swapped in place in one session: vanilla, Lodestone's dedup alone (1.4.1), with its
+/// slot count check, with its indexed lookup, OptiTime's lookup, and Lodestone patched
+/// after OptiTime, as it is in game, where it runs in OptiTime's place. Each sample
+/// recipe is placed into the grid one ingredient at a time, one lookup per placement,
+/// as a player fills a grid. Also records which recipe each patch set picks for every
+/// grid state.
 /// </summary>
 public class CraftingGridBench
 {
@@ -75,7 +76,8 @@ public class CraftingGridBench
         var configs = new (string name, Action apply)[]
         {
             ("vanilla", () => { }),
-            ("dedup only (1.4.1)", () => { ApplyLodestone(); Unpatch("MatchesTranspiler"); }),
+            ("dedup only (1.4.1)", () => { ApplyLodestone(); Unpatch("MatchesTranspiler"); UnpatchPrefix("Lookup"); }),
+            ("dedup + count", () => { ApplyLodestone(); UnpatchPrefix("Lookup"); }),
             ("lodestone", ApplyLodestone),
             ("optitime", ApplyOptiTime),
             ("lodestone over optitime", () => { ApplyOptiTime(); ApplyLodestone(); }),
@@ -159,6 +161,9 @@ public class CraftingGridBench
         }
     }
 
+    static void UnpatchPrefix(string prefix) =>
+        new Harmony("lodestone").Unpatch(find, hb.GetMethod(prefix, BindingFlags.NonPublic | BindingFlags.Static));
+
     static void Unpatch(string transpiler) =>
         new Harmony("lodestone").Unpatch(find, hb.GetMethod(transpiler, BindingFlags.NonPublic | BindingFlags.Static));
 
@@ -207,14 +212,14 @@ public class CraftingGridBench
         Assert.Equal(0, differ.Count);
     }
 
-    static List<GridRecipe> Usable(IWorldAccessor world) => world.GridRecipes.Where(r => r.Enabled && r.Width <= 3 && r.Height <= 3 && r.ResolvedIngredients != null
+    internal static List<GridRecipe> Usable(IWorldAccessor world) => world.GridRecipes.Where(r => r.Enabled && r.Width <= 3 && r.Height <= 3 && r.ResolvedIngredients != null
         && r.ResolvedIngredients.Any(i => i != null)
         && r.ResolvedIngredients.All(i => i == null || (i.MatchingType == EnumRecipeMatchType.Exact && i.ResolvedItemStack != null))).ToList();
 
     // The recipe's ingredients laid out in a 3x3 grid; shapeless ones fill from the first slot
-    static ItemStack[] Fill(GridRecipe recipe) => Placements(recipe).Aggregate(new ItemStack[9], (g, p) => { g[p.slot] = p.stack; return g; });
+    internal static ItemStack[] Fill(GridRecipe recipe) => Placements(recipe).Aggregate(new ItemStack[9], (g, p) => { g[p.slot] = p.stack; return g; });
 
-    static List<(int slot, ItemStack stack)> Placements(GridRecipe recipe)
+    internal static List<(int slot, ItemStack stack)> Placements(GridRecipe recipe)
     {
         var placed = new List<(int, ItemStack)>();
         for (int i = 0; i < recipe.ResolvedIngredients.Length; i++)
@@ -263,12 +268,12 @@ public class CraftingGridBench
 
     static void ApplyOptiTimeMatches() => new Harmony(OptiTimeId).Patch(matches, prefix: new HarmonyMethod(ot, "MatchesWithWorld_Prefix"));
 
-    static void SetGrid(InventoryCraftingGrid grid, ItemStack[] stacks)
+    internal static void SetGrid(InventoryCraftingGrid grid, ItemStack[] stacks)
     {
         for (int i = 0; i < stacks.Length; i++) grid[i].Itemstack = stacks[i]?.Clone();
     }
 
-    static void Call(InventoryCraftingGrid grid) => find.Invoke(grid, null);
+    internal static void Call(InventoryCraftingGrid grid) => find.Invoke(grid, null);
 
     static string Owners(MethodBase m) => string.Join(",", Harmony.GetPatchInfo(m)?.Owners ?? []) is { Length: > 0 } s ? s : "none";
 

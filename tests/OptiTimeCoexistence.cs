@@ -43,9 +43,9 @@ public class OptiTimeCoexistence
         var prefixes = Harmony.GetPatchInfo(find).Prefixes.OrderByDescending(p => p.priority).ToList();
         Log("Prefixes, in order: " + string.Join(", ", prefixes.Select(p => $"{p.owner}:{p.PatchMethod.Name}")));
         Assert.True(prefixes.Any(p => p.PatchMethod.DeclaringType?.FullName == "OptiTime.RecipeLookupCacheOptimization"));
-        int takeOver = prefixes.FindIndex(p => p.owner == "lodestone" && p.PatchMethod.Name == "TakeOver");
+        int lookup = prefixes.FindIndex(p => p.owner == "lodestone" && p.PatchMethod.Name == "Lookup");
         int optiTime = prefixes.FindIndex(p => p.PatchMethod.DeclaringType?.FullName == "OptiTime.RecipeLookupCacheOptimization");
-        Assert.True(takeOver >= 0 && takeOver < optiTime);
+        Assert.True(lookup >= 0 && lookup < optiTime);
 
         // OptiTime also stands down its handbook optimization when this is patched
         var info = AccessTools.Method(AccessTools.TypeByName("Vintagestory.GameContent.CollectibleBehaviorHandbookTextAndExtraInfo"), "GetHandbookInfo");
