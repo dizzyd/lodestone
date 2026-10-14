@@ -39,7 +39,6 @@ public class CraftingGridBench
     public async Task Benchmark()
     {
         await OnClient();
-        Assert.NotNull(ot);
         Assert.NotNull(hb);
         var world = Capi.World;
         var grid = (InventoryCraftingGrid)world.Player.InventoryManager.GetOwnInventory(GlobalConstants.craftingInvClassName);
@@ -49,6 +48,7 @@ public class CraftingGridBench
         Log($"GridRecipes: {world.GridRecipes.Count}; ingredient keys: {world.FastSearchRecipesByIngredient.Count}");
         Log("By domain: " + string.Join(", ", world.GridRecipes.GroupBy(r => r.Name?.Domain).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}")));
         Log($"Patches at start on FindMatchingRecipe: {Owners(find)}; on Matches: {Owners(matches)}");
+        others = RivalBench.Record(p => p.owner != "lodestone" && p.owner != OptiTimeId);
         Log($"lodestone mode: {hb.GetProperty("Mode").GetValue(null)}");
 
         // Recipes a 3x3 grid can hold whose every ingredient is one exact stack
@@ -73,7 +73,7 @@ public class CraftingGridBench
         }
         Log($"Grid states: {states.Count}");
 
-        var configs = new (string name, Action apply)[]
+        var all = new (string name, Action apply)[]
         {
             ("vanilla", () => { }),
             ("dedup only", () => { ApplyLodestone(); Unpatch("MatchesTranspiler"); UnpatchPrefix("Lookup"); }),
@@ -82,6 +82,17 @@ public class CraftingGridBench
             ("optitime", ApplyOptiTime),
             ("lodestone over optitime", () => { ApplyOptiTime(); ApplyLodestone(); }),
         };
+        var configs = (ot == null ? all.Where(c => !c.name.Contains("optitime")) : all).ToList();
+        if (ot == null) Log("OptiTime is not installed; its configurations are left out");
+
+        // Any other mod that patches the lookup, alone and with Lodestone patched after it, as in game
+        if (others.Count > 0)
+        {
+            string label = string.Join("+", others.Select(r => r.Patch.owner).Distinct());
+            Log($"Also patched by {label}: " + string.Join(", ", others.Select(r => $"{r.Type} {r.Method.Name} <- {r.Patch.PatchMethod.Name}")));
+            configs.Add((label, () => RivalBench.Restore(others)));
+            configs.Add((label + " + lodestone", () => { RivalBench.Restore(others); ApplyLodestone(); }));
+        }
 
         var cold = configs.ToDictionary(c => c.name, _ => new List<double>());
         var warm = configs.ToDictionary(c => c.name, _ => new List<double>());
@@ -123,16 +134,25 @@ public class CraftingGridBench
         SetGrid(grid, new ItemStack[width * width]);
         Call(grid);
 
-        // OptiTime's index build, timed alone
-        ApplyOptiTime();
-        ot.GetMethod("Cleanup").Invoke(null, null);
-        SetGrid(grid, states[0].slots);
-        long b = Stopwatch.GetTimestamp();
-        Call(grid);
-        Log($"OptiTime first lookup incl. index build: {Stopwatch.GetElapsedTime(b).TotalMilliseconds:F1} ms");
-        Restore();
-        SetGrid(grid, new ItemStack[width * width]);
-        Call(grid);
+        if (ot != null)
+        {
+            // OptiTime's index build, timed alone
+            ApplyOptiTime();
+            ot.GetMethod("Cleanup").Invoke(null, null);
+            SetGrid(grid, states[0].slots);
+            long b = Stopwatch.GetTimestamp();
+            Call(grid);
+            Log($"OptiTime first lookup incl. index build: {Stopwatch.GetElapsedTime(b).TotalMilliseconds:F1} ms");
+            Restore();
+            SetGrid(grid, new ItemStack[width * width]);
+            Call(grid);
+        }
+        else
+        {
+            Restore();
+            SetGrid(grid, new ItemStack[width * width]);
+            Call(grid);
+        }
 
         Log("");
         Log($"Per lookup, ms, {states.Count} grid states x {Rounds} rounds:");
@@ -176,6 +196,7 @@ public class CraftingGridBench
     public async Task SameRecipeAsVanilla()
     {
         await OnClient();
+        if (others.Count == 0) others = RivalBench.Record(p => p.owner != "lodestone" && p.owner != OptiTimeId);
         var world = Capi.World;
         var grid = (InventoryCraftingGrid)world.Player.InventoryManager.GetOwnInventory(GlobalConstants.craftingInvClassName);
         var grids = Usable(world).Select(r => Fill(r)).ToList();
@@ -235,9 +256,13 @@ public class CraftingGridBench
     }
 
     // The patches as the game made them: OptiTime's in StartClientSide, Lodestone's at LevelFinalize
+    // Other mods' patches on the lookup, recorded before the benchmark clears them
+    static List<RivalBench.Recorded> others = [];
+
     static void Restore()
     {
         ClearPatches();
+        RivalBench.Restore(others);
         if (Capi.ModLoader.IsModEnabled("optitime")) ApplyOptiTime();
         ApplyLodestone();
     }

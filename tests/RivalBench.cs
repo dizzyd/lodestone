@@ -31,17 +31,11 @@ public class RivalBench
         AccessTools.Method(typeof(GridRecipe), "Matches", [typeof(IPlayer), typeof(IWorldAccessor), typeof(ItemSlot[]), typeof(int)]),
     ];
 
-    record Recorded(MethodBase Method, HarmonyPatchType Type, Patch Patch);
+    internal record Recorded(MethodBase Method, HarmonyPatchType Type, Patch Patch);
 
-    [VsTest(TimeoutMs = 1_800_000)]
-    [RequiresClient]
-    public async Task Compare()
+    /// <summary>Every patch on the crafting lookup's targets whose owner <paramref name="keep"/> accepts.</summary>
+    internal static List<Recorded> Record(System.Func<Patch, bool> keep)
     {
-        await OnClient();
-        if (Harmony.GetPatchInfo(find)?.Owners.Contains("lodestone") == true) Skip("Needs Lodestone's CraftingGrid off in lodestone.json, and one other crafting mod");
-        var world = Capi.World;
-        var grid = (InventoryCraftingGrid)world.Player.InventoryManager.GetOwnInventory(GlobalConstants.craftingInvClassName);
-
         var recorded = new List<Recorded>();
         foreach (var m in targets)
         {
@@ -52,7 +46,19 @@ public class RivalBench
             recorded.AddRange(info.Transpilers.Select(p => new Recorded(m, HarmonyPatchType.Transpiler, p)));
             recorded.AddRange(info.Finalizers.Select(p => new Recorded(m, HarmonyPatchType.Finalizer, p)));
         }
-        recorded = recorded.Where(r => r.Patch.owner != "lodestone").ToList();
+        return recorded.Where(r => keep(r.Patch)).ToList();
+    }
+
+    [VsTest(TimeoutMs = 1_800_000)]
+    [RequiresClient]
+    public async Task Compare()
+    {
+        await OnClient();
+        if (Harmony.GetPatchInfo(find)?.Owners.Contains("lodestone") == true) Skip("Needs Lodestone's CraftingGrid off in lodestone.json, and one other crafting mod");
+        var world = Capi.World;
+        var grid = (InventoryCraftingGrid)world.Player.InventoryManager.GetOwnInventory(GlobalConstants.craftingInvClassName);
+
+        var recorded = Record(p => p.owner != "lodestone");
         if (recorded.Count == 0) Skip("No other mod patches the crafting grid lookup");
         string rival = string.Join(", ", recorded.Select(r => r.Patch.owner).Distinct());
         Log($"Rival: {rival}; mods: {string.Join(", ", Capi.ModLoader.Mods.Select(m => $"{m.Info.ModID} {m.Info.Version}").Where(s => !s.StartsWith("game") && !s.StartsWith("survival") && !s.StartsWith("creative")))}");
@@ -157,12 +163,12 @@ public class RivalBench
         foreach (var m in targets) new Harmony("lodestone").Unpatch(m, HarmonyPatchType.All, "lodestone");
     }
 
-    static void Lift(List<Recorded> recorded)
+    internal static void Lift(List<Recorded> recorded)
     {
         foreach (var r in recorded) new Harmony(r.Patch.owner).Unpatch(r.Method, r.Patch.PatchMethod);
     }
 
-    static void Restore(List<Recorded> recorded)
+    internal static void Restore(List<Recorded> recorded)
     {
         foreach (var r in recorded)
         {
