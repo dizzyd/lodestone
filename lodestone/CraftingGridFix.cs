@@ -106,10 +106,21 @@ internal static class CraftingGridFix
             if (prechecking) harmony.Patch(find, transpiler: new HarmonyMethod(typeof(CraftingGridFix), nameof(MatchesTranspiler)));
         }
 
-        indexing = FoundMatch != null && GridSizeRef != null;
-        var lookup = new HarmonyMethod(typeof(CraftingGridFix), nameof(Lookup)) { priority = Priority.First, before = optiTime == null ? [] : [optiTime.owner] };
-        harmony.Patch(find, prefix: lookup);
-        if (optiTime != null) log.Notification("Finding crafting grid recipes in place of OptiTime's recipe lookup, which can pick a different recipe from vanilla's ({0}). OptiTime's other optimizations are unaffected", Mode);
+        // The indexed lookup skips vanilla's body, and every prefix after it, so it stays off
+        // where another mod rewrites the method: a transpiler on the body, or a prefix that
+        // can skip it. OptiTime's is the one it runs in place of.
+        Patches info = Harmony.GetPatchInfo(find);
+        string[] rewriters = (info == null ? [] : info.Transpilers.Concat(info.Prefixes.Where(p => p.PatchMethod.ReturnType == typeof(bool))))
+            .Where(p => p.owner != harmony.Id && p.PatchMethod.DeclaringType?.FullName != OptiTimeLookup)
+            .Select(p => p.owner).Distinct().ToArray();
+        indexing = rewriters.Length == 0 && FoundMatch != null && GridSizeRef != null;
+        if (rewriters.Length == 0)
+        {
+            var lookup = new HarmonyMethod(typeof(CraftingGridFix), nameof(Lookup)) { priority = Priority.First, before = optiTime == null ? [] : [optiTime.owner] };
+            harmony.Patch(find, prefix: lookup);
+        }
+        if (rewriters.Length > 0) log.Notification("Leaving the crafting grid recipe lookup to {0}, which already rewrites it ({1})", string.Join(", ", rewriters), Mode);
+        else if (optiTime != null) log.Notification("Finding crafting grid recipes in place of OptiTime's recipe lookup, which can pick a different recipe from vanilla's ({0}). OptiTime's other optimizations are unaffected", Mode);
         else log.Notification("Finding crafting grid recipes faster ({0})", Mode);
     }
 
@@ -126,7 +137,6 @@ internal static class CraftingGridFix
     // Ahead of everything else on the method: false when it found vanilla's recipe itself
     private static bool Lookup(InventoryCraftingGrid __instance)
     {
-        indexedTries = -1;
         if (indexing && Indexed(__instance)) return false;
         if (!optiTimeThere) return true;   // vanilla's body, with the transpilers
         FindMatchingRecipe(__instance);    // a copy of it, as OptiTime's prefix would skip it
@@ -257,7 +267,11 @@ internal static class CraftingGridFix
         if (seen.Add(recipe)) list.Add(recipe);
     }
 
-    private static void Start(out long __state) => __state = Stopwatch.GetTimestamp();
+    private static void Start(out long __state)
+    {
+        indexedTries = -1;   // set only by a lookup the index answers
+        __state = Stopwatch.GetTimestamp();
+    }
 
     private static void End(long __state)
     {
