@@ -5,10 +5,10 @@
     "authors": [
         "DizzyD"
     ],
-    "description": "Optimizations for large modpacks: faster handbook loading and search, lang lookups and crafting grid, with the same results as vanilla. Optional on both client and server.",
+    "description": "Optimizations for large modpacks: faster handbook loading and search, lang lookups and crafting grid, with the same results as vanilla. Players joining a server that runs it get it too.",
     "version": "1.4.1",
     "side": "Universal",
-    "requiredOnClient": false,
+    "requiredOnClient": true,
     "requiredOnServer": false,
     "dependencies": {
         "game": "1.22.0"

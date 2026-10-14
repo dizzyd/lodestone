@@ -5,10 +5,12 @@ crafting grid, which all get slower as a pack grows, and every fix gives the sam
 as vanilla. The fixes for other mods only apply when the mod they work around is
 installed. The log says what was done (`[lodestone]`).
 
-It is optional on both sides: players can join a server without it, and a server can run
-it without players having it. The handbook fixes run on the client. The crafting grid fix
-runs on whichever side has the mod, because the server repeats the same recipe lookup for
-every player's crafting grid.
+A server that runs it requires it of its players, and the game offers it to them when
+they join: most of the fixes are in the handbook and lang lookups, which only the client
+has, so this is how a server's players get them. A player can still use it on a server
+without it. Every fix gives vanilla's results, so either side having it alone changes
+nothing but speed. The crafting grid fix runs on whichever side has the mod, because the
+server repeats the same recipe lookup for every player's crafting grid.
 
 ## Settings
 
