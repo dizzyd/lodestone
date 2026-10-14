@@ -163,6 +163,22 @@ patches.
 With OptiTime installed, the mean lookup took 3.4 ms with OptiTime's version and 0.12 ms
 with Lodestone's in its place.
 
+### With other crafting mods
+
+If another mod already rewrites the crafting grid lookup, with a transpiler on its body or
+a prefix that can skip it, Lodestone's indexed lookup stays off and the log names that mod.
+Lodestone still speeds up vanilla's loop with the hash set and the slot-count check, which
+skip only recipes that cannot match. OptiTime is the one exception, described above.
+
+Improved Handbook Recipe Helper rewrites the lookup to collect every recipe that matches
+the grid, and lets the player cycle between them with its Next button. For its versions
+1227.0.x, Lodestone collects the same list from its index, in the same order, and passes
+it to the mod's own choice, so cycling works as before. In the test pack the mean lookup
+took 7.5 ms with Improved Handbook Recipe Helper alone and 0.84 ms with Lodestone. All
+18,618 completed recipe grids gave the same recipe and the same match count as the mod
+alone, and in the 539 grids that match more than one recipe, Next stepped through the
+same recipes in the same order. For any other version, Lodestone leaves the lookup to it.
+
 ## Building
 
 ```bash

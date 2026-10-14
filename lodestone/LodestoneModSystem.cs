@@ -10,9 +10,13 @@ public class LodestoneModSystem : ModSystem
 {
     public static LodestoneConfig Config { get; private set; } = new();
 
+    // For fixes that check another mod's version; the same mods load on both sides
+    internal static IModLoader ModLoader { get; private set; }
+
     public override void StartPre(ICoreAPI api)
     {
         Config = LoadConfig(api);
+        ModLoader = api.ModLoader;
     }
 
     private LodestoneConfig LoadConfig(ICoreAPI api)

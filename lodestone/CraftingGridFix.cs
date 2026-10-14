@@ -29,6 +29,11 @@ namespace lodestone;
 /// pattern has ingredients, so one whose ingredient count differs from the grid's
 /// filled slot count is skipped without the call.
 ///
+/// Improved Handbook Recipe Helper rewrites that loop to collect every matching recipe, shaped
+/// ones then shapeless, and let the player cycle between them through its Inject. The
+/// indexed lookup gives the same list in the same order, so for the versions read it
+/// collects the list itself and hands it to Inject.
+///
 /// Both of those keep vanilla's loop. For the player's 3x3 grid a prefix replaces it:
 /// GridLookupIndex gives the recipes that could match, in vanilla's list order, so the
 /// first that Matches is vanilla's recipe. Anything else, or a slot holding an empty
@@ -41,6 +46,9 @@ internal static class CraftingGridFix
     private static bool prechecking;
     private static bool indexing;
     private static bool optiTimeThere;
+
+    // Improved Handbook Recipe Helper's choice among every match, when the lookup collects for it
+    private static System.Func<GridRecipe, List<GridRecipe>, ICoreAPI, IPlayer, GridRecipe> injectChoice;
 
     [ThreadStatic] private static List<GridRecipe> currentList;
     [ThreadStatic] private static HashSet<GridRecipe> seen;
@@ -55,7 +63,8 @@ internal static class CraftingGridFix
     {
         get
         {
-            string[] on = [indexing ? "indexed" : null, deduplicating ? "hashed" : null, prechecking ? "counted" : null];
+            string[] on = [indexing ? (injectChoice != null ? "indexed for Improved Handbook Recipe Helper" : "indexed") : null,
+                deduplicating ? "hashed" : null, prechecking ? "counted" : null];
             return on.Any(m => m != null) ? string.Join(", ", on.Where(m => m != null)) : "vanilla";
         }
     }
@@ -113,6 +122,8 @@ internal static class CraftingGridFix
         string[] rewriters = (info == null ? [] : info.Transpilers.Concat(info.Prefixes.Where(p => p.PatchMethod.ReturnType == typeof(bool))))
             .Where(p => p.owner != harmony.Id && p.PatchMethod.DeclaringType?.FullName != OptiTimeLookup)
             .Select(p => p.owner).Distinct().ToArray();
+        injectChoice = optiTime == null && rewriters is [RecipeCyclingId] ? RecipeCycling(info, log) : null;
+        if (injectChoice != null) rewriters = [];
         indexing = rewriters.Length == 0 && FoundMatch != null && GridSizeRef != null;
         if (rewriters.Length == 0)
         {
@@ -120,6 +131,7 @@ internal static class CraftingGridFix
             harmony.Patch(find, prefix: lookup);
         }
         if (rewriters.Length > 0) log.Notification("Leaving the crafting grid recipe lookup to {0}, which already rewrites it ({1})", string.Join(", ", rewriters), Mode);
+        else if (injectChoice != null) log.Notification("Finding crafting grid recipes faster, collecting every match for Improved Handbook Recipe Helper's recipe cycling ({0})", Mode);
         else if (optiTime != null) log.Notification("Finding crafting grid recipes in place of OptiTime's recipe lookup, which can pick a different recipe from vanilla's ({0}). OptiTime's other optimizations are unaffected", Mode);
         else log.Notification("Finding crafting grid recipes faster ({0})", Mode);
     }
@@ -169,13 +181,32 @@ internal static class CraftingGridFix
             keys[i] = slotKeys[i];
         }
 
-        // As vanilla does before it searches
+        // As vanilla does before it searches; Improved Handbook Recipe Helper reads the recipe first
+        GridRecipe previous = grid.MatchingRecipe;
         grid.MatchingRecipe = null;
         OutputRef(grid).Itemstack = null;
         IPlayer player = world.PlayerByUid(PlayerUidRef(grid));
 
         int tries = 0;
         index.ShapedCandidates(keys, GridLookupIndex.GridShape(slots), shaped, considered);
+        if (injectChoice != null)
+        {
+            var matches = new List<GridRecipe>();
+            foreach (var candidate in shaped)
+            {
+                tries++;
+                if (candidate.recipe.Matches(player, world, slots, 3)) matches.Add(candidate.recipe);
+            }
+            foreach (GridRecipe recipe in index.ShapelessCandidates(keys, considered))
+            {
+                tries++;
+                if (recipe.Matches(player, world, slots, 3)) matches.Add(recipe);
+            }
+            if (matches.Count > 0) FoundMatch(grid, injectChoice(previous, matches, grid.Api, grid.Player));
+            grid.dirtySlots.Add(GridSizeSqRef(grid));
+            indexedTries = tries;
+            return true;
+        }
         foreach (var candidate in shaped)
         {
             tries++;
@@ -200,6 +231,35 @@ internal static class CraftingGridFix
 
     // OptiTime's patch class, which is steadier than its Harmony id
     private const string OptiTimeLookup = "OptiTime.RecipeLookupCacheOptimization";
+
+    // ---- Improved Handbook Recipe Helper ----
+
+    private const string RecipeCyclingId = "improvedhandbookrecipes";
+    private const string RecipeCyclingModId = "improvedhandbookrecipesfork";
+    private const string RecipeCyclingChecked = "1227.0.";
+    private const string RecipeCyclingPatch = "ImprovedHandbookRecipes.Patch_InventoryCraftingGrid_FindMatchingRecipe";
+
+    /// <summary>
+    /// Improved Handbook Recipe Helper's Inject, when its only rewrite of the lookup is the
+    /// transpiler read for these versions: one that turns each FoundMatch into collecting
+    /// the match, then calls FoundMatch with Inject's choice when there were any. Else null,
+    /// and the lookup is left to it.
+    /// </summary>
+    private static System.Func<GridRecipe, List<GridRecipe>, ICoreAPI, IPlayer, GridRecipe> RecipeCycling(Patches info, ILogger log)
+    {
+        string version = LodestoneModSystem.ModLoader?.GetMod(RecipeCyclingModId)?.Info.Version;
+        bool onlyItsTranspiler = info.Transpilers.Count(p => p.owner == RecipeCyclingId) == 1
+            && info.Transpilers.Any(p => p.owner == RecipeCyclingId && p.PatchMethod.DeclaringType?.FullName == RecipeCyclingPatch)
+            && !info.Prefixes.Any(p => p.owner == RecipeCyclingId && p.PatchMethod.ReturnType == typeof(bool));
+        MethodInfo inject = AccessTools.Method(AccessTools.TypeByName(RecipeCyclingPatch), "Inject",
+            [typeof(GridRecipe), typeof(List<GridRecipe>), typeof(ICoreAPI), typeof(IPlayer)]);
+        if (version == null || !version.StartsWith(RecipeCyclingChecked) || !onlyItsTranspiler || inject?.ReturnType != typeof(GridRecipe))
+        {
+            log.Notification("Not collecting crafting grid matches for Improved Handbook Recipe Helper {0}: only {1}x has been checked", version, RecipeCyclingChecked);
+            return null;
+        }
+        return AccessTools.MethodDelegate<System.Func<GridRecipe, List<GridRecipe>, ICoreAPI, IPlayer, GridRecipe>>(inject);
+    }
 
     // Vanilla's FindMatchingRecipe, as rewritten by ReverseTranspiler
     private static void FindMatchingRecipe(InventoryCraftingGrid instance) => throw new NotImplementedException("Replaced by a reverse patch");
