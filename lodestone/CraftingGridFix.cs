@@ -138,6 +138,22 @@ internal static class CraftingGridFix
 
     // ---- the indexed lookup ----
 
+    public static bool Indexing => indexing;
+
+    /// <summary>
+    /// Builds <paramref name="world"/>'s GridLookupIndex now, while the world loads, rather
+    /// than on the first lookup, where it held up the game for a fifth of a second in the
+    /// test pack. Each world has its own: a singleplayer client and server build one each.
+    /// </summary>
+    public static void BuildIndex(IWorldAccessor world, ILogger log)
+    {
+        if (world?.FastSearchRecipesByIngredient == null || world.GridRecipes == null) return;
+        long start = Stopwatch.GetTimestamp();
+        GridLookupIndex index = GridLookupIndex.For(world);
+        log.Notification("Built the crafting grid recipe index for {0} grid recipes and {1} ingredient keys in {2:F0} ms",
+            world.GridRecipes.Count, index.KeyCount, Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+    }
+
     private static readonly AccessTools.FieldRef<InventoryCraftingGrid, int> GridSizeRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, int>("GridSize");
     private static readonly AccessTools.FieldRef<InventoryCraftingGrid, int> GridSizeSqRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, int>("GridSizeSq");
     private static readonly AccessTools.FieldRef<InventoryCraftingGrid, ItemSlot[]> SlotsRef = AccessTools.FieldRefAccess<InventoryCraftingGrid, ItemSlot[]>("slots");

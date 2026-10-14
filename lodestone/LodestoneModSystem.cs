@@ -44,6 +44,10 @@ public class LodestoneModSystem : ModSystem
         // OptiTime is client-only, so a dedicated server never has it. A singleplayer
         // server shares the client's process and so its patches, and the client applies
         // them once OptiTime has made its own.
+        // The recipes are all loaded by the first tick. A singleplayer server's index is built
+        // here too, since its client applies the patches only after the server is up.
+        if (Config.CraftingGrid) api.Event.ServerRunPhase(EnumServerRunPhase.RunGame, () => CraftingGridFix.BuildIndex(api.World, Mod.Logger));
+
         if (api.Server.IsDedicated && Enabled(Config.CraftingGrid, "crafting grid fix"))
         {
             CraftingGridFix.Apply(new Harmony(Mod.Info.ModID), Mod, takeOverFromOptiTime: false);
@@ -63,7 +67,11 @@ public class LodestoneModSystem : ModSystem
         {
             // OptiTime patches the crafting grid in its StartClientSide, and if another mod
             // got there first it saves its recipe lookup as off in the player's config.
-            if (Enabled(Config.CraftingGrid, "crafting grid fix")) CraftingGridFix.Apply(harmony, Mod, Config.CraftingGridOverOptiTime);
+            if (Enabled(Config.CraftingGrid, "crafting grid fix"))
+            {
+                CraftingGridFix.Apply(harmony, Mod, Config.CraftingGridOverOptiTime);
+                if (CraftingGridFix.Indexing) CraftingGridFix.BuildIndex(api.World, Mod.Logger);
+            }
 
             // ARL patches in StartPre, but whether its patch is needed depends on the
             // collectibles, which are only all present by LevelFinalize.
