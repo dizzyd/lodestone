@@ -1,9 +1,10 @@
 # Lodestone
 
-Optimizations for large modpacks. Lodestone speeds up the handbook, lang lookups and the
-crafting grid, which all get slower as a pack grows. Every fix gives the same results as
-vanilla. The fixes for other mods apply only when the mod they work around is installed.
-The log, under `[lodestone]`, says what was done.
+Lodestone makes large modpacks faster. It speeds up the handbook, lang lookups and the
+crafting grid, which all get slower as a pack grows, and every fix gives the same results
+as the unmodified game. It adds no blocks, items or recipes. The fixes for other mods
+apply only when the mod they work around is installed. The log, under `[lodestone]`,
+says what was done.
 
 A server that runs Lodestone requires it of its players, and the game offers it to them
 when they join. Most of the fixes are in the handbook and lang lookups, which run only on
@@ -78,18 +79,21 @@ exception. It makes the set of missing keys safe to add to from the handbook's t
 and Lodestone's version does the same.
 
 On a pack with 31,000 exact, 4,000 wildcard and 600 regex keys, the index gave the same
-result as vanilla for all of 97,000 lookups.
+result as vanilla for all of 97,000 lookups. In a test pack with 21,085 handbook pages,
+looking up the name, description and handbook text of every item, 95,880 keys in all,
+took 47 to 55 s in vanilla and 1.1 to 1.2 s with Lodestone, with the same answer for
+every key.
 
 ## Handbook search
 
 The handbook runs its search each time it opens or changes tab. With the search box
 empty, vanilla's search pattern is an empty group, which matches at every character. It
 counts those matches in every page's title and text, and then shows every page. With
-21,000 pages this took 0.7 to 0.8 s each time the handbook opened.
+21,000 pages this took 720 to 850 ms each time the handbook opened.
 
 An empty search shows every non-duplicate page of the current tab, in order, so Lodestone
-builds that list directly. It takes about 3 ms. Searches with text, or with only spaces,
-run as before.
+builds that list directly, in 3 to 4 ms. Searches with text, or with only spaces, run as
+before.
 
 ## Attribute Rendering Library
 
