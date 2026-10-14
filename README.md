@@ -159,3 +159,7 @@ export VINTAGE_STORY="$(ls -d ~/.cairn/games/1.22* | sort -V | tail -1)"
 ```
 
 The zip lands in `Releases/`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
