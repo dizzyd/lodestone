@@ -13,7 +13,7 @@ using static VsTestkit.Testing.Vs;
 
 /// <summary>
 /// Times InventoryCraftingGrid.FindMatchingRecipe on the client under six patch sets,
-/// swapped in place in one session: vanilla, Lodestone's dedup alone (1.4.1), with its
+/// swapped in place in one session: vanilla, Lodestone's dedup alone, with its
 /// slot count check, with its indexed lookup, OptiTime's lookup, and Lodestone patched
 /// after OptiTime, as it is in game, where it runs in OptiTime's place. Each sample
 /// recipe is placed into the grid one ingredient at a time, one lookup per placement,
@@ -76,7 +76,7 @@ public class CraftingGridBench
         var configs = new (string name, Action apply)[]
         {
             ("vanilla", () => { }),
-            ("dedup only (1.4.1)", () => { ApplyLodestone(); Unpatch("MatchesTranspiler"); UnpatchPrefix("Lookup"); }),
+            ("dedup only", () => { ApplyLodestone(); Unpatch("MatchesTranspiler"); UnpatchPrefix("Lookup"); }),
             ("dedup + count", () => { ApplyLodestone(); UnpatchPrefix("Lookup"); }),
             ("lodestone", ApplyLodestone),
             ("optitime", ApplyOptiTime),
