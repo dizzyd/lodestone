@@ -3,6 +3,7 @@ using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
+using ShiftCraftFix;
 
 namespace lodestone;
 
@@ -36,6 +37,13 @@ public class LodestoneModSystem : ModSystem
         config ??= new LodestoneConfig();
         api.StoreModConfig(config, LodestoneConfig.FileName);
         return config;
+    }
+
+    // Both sides need the shift-craft fix: the client repeats the transfer to predict it,
+    // and without the fix shows items the server never gave
+    public override void Start(ICoreAPI api)
+    {
+        if (Enabled(Config.ShiftCraftFix, "shift-craft fix")) ShiftCraftPatch.Apply(api);
     }
 
     // Both sides run the crafting grid's recipe lookup; only the client has a handbook
@@ -90,5 +98,6 @@ public class LodestoneModSystem : ModSystem
     {
         // Patches outlive the world; the next join loads this mod afresh and patches again
         new Harmony(Mod.Info.ModID).UnpatchAll(Mod.Info.ModID);
+        ShiftCraftPatch.Remove();
     }
 }

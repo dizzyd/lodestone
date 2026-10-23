@@ -48,6 +48,12 @@ public class LodestoneConfig
     public bool RemoveArlFilter { get; set; } = true;
 
     /// <summary>
+    /// Stop shift-clicking a crafting output duplicating items on 1.22.7, as slicing pies
+    /// does. Shift-Craft Fix's patch, shared with any other mod that carries it. Both sides.
+    /// </summary>
+    public bool ShiftCraftFix { get; set; } = true;
+
+    /// <summary>
     /// Log how long the handbook took to build its pages, and any crafting grid lookup
     /// taking 5 ms or more.
     /// </summary>

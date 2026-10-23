@@ -2,7 +2,8 @@
 
 Lodestone makes large modpacks faster. It speeds up the handbook, lang lookups and the
 crafting grid, which all get slower as a pack grows, and every fix gives the same results
-as the unmodified game. It adds no blocks, items or recipes. The fixes for other mods
+as the unmodified game. It also carries a fix for 1.22.7's shift-click crafting
+duplication. It adds no blocks, items or recipes. The fixes for other mods
 apply only when the mod they work around is installed. The log, under `[lodestone]`,
 says what was done.
 
@@ -26,6 +27,7 @@ default, and a change takes effect the next time a world loads.
 | `CraftingGridOverOptiTime` | running the crafting grid lookup in place of OptiTime's; off leaves it to OptiTime on the client |
 | `EmptyHandbookSearch` | listing the handbook's pages directly when the search box is empty |
 | `RemoveArlFilter` | removing ARL's handbook search patch |
+| `ShiftCraftFix` | the shift-click crafting fix, on whichever side reads the file |
 | `LogTimings` | the handbook build time and slow crafting lookups in the log |
 
 ## A Culinary Artillery meal matching
@@ -178,6 +180,23 @@ took 7.5 ms with Improved Handbook Recipe Helper alone and 0.84 ms with Lodeston
 18,618 completed recipe grids gave the same recipe and the same match count as the mod
 alone, and in the 539 grids that match more than one recipe, Next stepped through the
 same recipes in the same order. For any other version, Lodestone leaves the lookup to it.
+
+## Shift-click crafting
+
+On 1.22.7, shift-clicking a crafting output can duplicate items. Slicing pies is the usual
+case: the server hands out slices from a craft whose pies it never consumes, and the
+client shows slices the server does not have. 1.22.7 stops a shift-click transfer once the
+source slot's stack no longer matches the one it started with. A crafting output rebuilds
+its stack after every craft, and a pie's rebuilt copy carries fresh perish timestamps, so
+the check fails partway through a craft.
+
+Lodestone carries [Shift-Craft Fix](https://github.com/dizzyd/shiftcraftfix)'s patch,
+which skips that check for crafting outputs and leaves the grid's own check to decide when
+to stop. Shift-clicking then behaves as it did in 1.22.6. The patch runs on both sides,
+since the client predicts the transfer too. With Shift-Craft Fix or another mod carrying
+the same patch installed, it is applied once, and the log line beginning
+`[ShiftCraftFix]` says which mod applied it. On a game version without the check it
+patches nothing.
 
 ## Building
 
