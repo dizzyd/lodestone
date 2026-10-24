@@ -9,20 +9,28 @@ using System.Reflection.Emit;
 using System.Text;
 using HarmonyLib;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.Common;
 
 namespace ShiftCraftFix
 {
     /// <summary>
-    /// Stops a shift-click on a crafting output duplicating items, as slicing pies does in 1.22.7.
+    /// Stops a shift-click duplicating items or leaving ghosts on the client, as pies do in 1.22.7.
     ///
     /// 1.22.7's PlayerInventoryManager.TryTransferAway stops moving a stack as soon as the
-    /// source slot's stack no longer Satisfies the one it started with. A crafting output's
-    /// stack is rebuilt by every craft, and when that stack carries other stacks - a pie's
-    /// ingredients - the rebuilt copy's perish state differs from the old one, so the check
-    /// fails partway through a craft whose output has been handed out but whose ingredients
-    /// have not been consumed. This skips the check for crafting outputs only, where the
-    /// grid's own "can I still craft this" test already decides when to stop.
+    /// source slot's stack no longer Satisfies the one it started with. Satisfies ignores a
+    /// stack's own perish state but not that of the stacks it carries - a pie's
+    /// ingredients - so a pie that has only been re-stamped counts as a different stack:
+    /// - A crafting output rebuilds its stack after every craft, so the check fails partway
+    ///   through a craft whose output has been handed out but whose ingredients have not been
+    ///   consumed.
+    /// - Anywhere else, merging into a partial stack refreshes the source's perish state. The
+    ///   server re-stamps it if its copy is stale and stops; the client, whose copy is
+    ///   re-stamped every time the slot is drawn, does not, and shows items the server never
+    ///   moved.
+    /// This keeps the check but also accepts a stack that matches as the merge itself compares
+    /// stacks: ignoring GlobalConstants.IgnoredStackAttributes - perish state, temperature, tool
+    /// mode and render variant - at every depth, not just on the outer stack.
     ///
     /// This file is written to be copied into other mods. A mod that carries it calls
     /// <see cref="Apply"/> from its ModSystem's Start and <see cref="Remove"/> from Dispose.
@@ -34,7 +42,7 @@ namespace ShiftCraftFix
     public static class ShiftCraftPatch
     {
         public const string HarmonyId = "shiftcraftfix.trytransferaway";
-        public const int Revision = 1;
+        public const int Revision = 2;
 
         static readonly MethodInfo Target = AccessTools.Method(typeof(PlayerInventoryManager), "TryTransferAway",
             new[] { typeof(ItemSlot), typeof(ItemStackMoveOperation).MakeByRefType(), typeof(bool), typeof(StringBuilder), typeof(bool) });
@@ -42,7 +50,6 @@ namespace ShiftCraftFix
 
         /// <summary>Apply calls not yet matched by a Remove: one per side, two in singleplayer.</summary>
         static int users;
-        [ThreadStatic] static bool fromCraftingOutput;
 
         /// <summary>Whether some copy of the fix is patched in, this one or another mod's.</summary>
         public static bool Active => Holder() != null;
@@ -76,10 +83,7 @@ namespace ShiftCraftFix
 
                 var harmony = new Harmony(HarmonyId);
                 if (holder != null) harmony.Unpatch(Target, HarmonyPatchType.All, HarmonyId);
-                harmony.Patch(Target,
-                    prefix: new HarmonyMethod(typeof(ShiftCraftPatch), nameof(Prefix)),
-                    finalizer: new HarmonyMethod(typeof(ShiftCraftPatch), nameof(Finalizer)),
-                    transpiler: new HarmonyMethod(typeof(ShiftCraftPatch), nameof(Transpiler)));
+                harmony.Patch(Target, transpiler: new HarmonyMethod(typeof(ShiftCraftPatch), nameof(Transpiler)));
                 api.Logger.Notification("[ShiftCraftFix] Applied {0}{1}", ActiveCopy,
                     holder != null ? $", replacing r{RevisionOf(holder)} from {holder.Assembly.GetName().Name}" : "");
             }
@@ -101,24 +105,14 @@ namespace ShiftCraftFix
 
         static int RevisionOf(Type copy) => copy.GetField(nameof(Revision))?.GetValue(null) as int? ?? 0;
 
-        static void Prefix(ItemSlot sourceSlot, out bool __state)
-        {
-            __state = fromCraftingOutput;
-            fromCraftingOutput = sourceSlot is ItemSlotCraftingOutput;
-        }
-
-        static Exception Finalizer(Exception __exception, bool __state)
-        {
-            fromCraftingOutput = __state;
-            return __exception;
-        }
-
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> code) =>
             code.Select(ins => ins.Calls(Satisfies)
                 ? new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(ShiftCraftPatch), nameof(StillTheSame))).MoveLabelsFrom(ins).MoveBlocksFrom(ins)
                 : ins);
 
-        static bool StillTheSame(ItemStack now, ItemStack before) => fromCraftingOutput || now.Satisfies(before);
+        /// <summary>The same stack, or one that differs only in GlobalConstants.IgnoredStackAttributes, at any depth.</summary>
+        static bool StillTheSame(ItemStack now, ItemStack before) =>
+            now.Satisfies(before) || now.Collectible.Equals(now, before, GlobalConstants.IgnoredStackAttributes);
     }
 }
 

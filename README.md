@@ -2,8 +2,8 @@
 
 Lodestone makes large modpacks faster. It speeds up the handbook, lang lookups and the
 crafting grid, which all get slower as a pack grows, and every fix gives the same results
-as the unmodified game. It also carries a fix for 1.22.7's shift-click crafting
-duplication. It adds no blocks, items or recipes. The fixes for other mods
+as the unmodified game. It also carries a fix for 1.22.7's shift-click
+duplication of pies. It adds no blocks, items or recipes. The fixes for other mods
 apply only when the mod they work around is installed. The log, under `[lodestone]`,
 says what was done.
 
@@ -27,7 +27,7 @@ default, and a change takes effect the next time a world loads.
 | `CraftingGridOverOptiTime` | running the crafting grid lookup in place of OptiTime's; off leaves it to OptiTime on the client |
 | `EmptyHandbookSearch` | listing the handbook's pages directly when the search box is empty |
 | `RemoveArlFilter` | removing ARL's handbook search patch |
-| `ShiftCraftFix` | the shift-click crafting fix, on whichever side reads the file |
+| `ShiftCraftFix` | the shift-click fix, on whichever side reads the file |
 | `LogTimings` | the handbook build time and slow crafting lookups in the log |
 
 ## A Culinary Artillery meal matching
@@ -183,20 +183,25 @@ same recipes in the same order. For any other version, Lodestone leaves the look
 
 ## Shift-click crafting
 
-On 1.22.7, shift-clicking a crafting output can duplicate items. Slicing pies is the usual
-case: the server hands out slices from a craft whose pies it never consumes, and the
-client shows slices the server does not have. 1.22.7 stops a shift-click transfer once the
-source slot's stack no longer matches the one it started with. A crafting output rebuilds
-its stack after every craft, and a pie's rebuilt copy carries fresh perish timestamps, so
-the check fails partway through a craft.
+On 1.22.7, shift-clicking pies can duplicate items or leave ghost items on the client.
+Slicing pies in the crafting grid is the usual case: the server hands out slices from a
+craft whose pies it never consumes, and the client shows slices the server does not have.
+Shift-clicking pies from any other slot onto a partial stack can leave ghosts too, now and
+then. 1.22.7 stops a shift-click transfer once the source slot's stack no longer matches
+the one it started with, and that comparison ignores a stack's own perish state but not
+that of the stacks inside it. A crafting output rebuilds its stack after every craft, and
+topping up a partial stack refreshes the source's perish state, so a pie whose ingredients
+have only been re-stamped stops matching.
 
 Lodestone carries [Shift-Craft Fix](https://github.com/dizzyd/shiftcraftfix)'s patch,
-which skips that check for crafting outputs and leaves the grid's own check to decide when
-to stop. Shift-clicking then behaves as it did in 1.22.6. The patch runs on both sides,
-since the client predicts the transfer too. With Shift-Craft Fix or another mod carrying
-the same patch installed, it is applied once, and the log line beginning
-`[ShiftCraftFix]` says which mod applied it. On a game version without the check it
-patches nothing.
+which keeps the check but compares the stacks the way the game does when deciding whether
+two stacks can merge, ignoring perish state, temperature, tool mode and render variant
+inside a stack's contents as well as on the stack itself. A stack that has really become
+something else still stops the transfer. Shift-clicking then behaves as it did in 1.22.6.
+The patch runs on both sides, since the client predicts the transfer too. With Shift-Craft
+Fix or another mod carrying the same patch installed, the newest revision is applied once,
+and the log line beginning `[ShiftCraftFix]` says which mod applied it. On a game version
+without the check it patches nothing.
 
 ## Building
 
